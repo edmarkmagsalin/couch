@@ -2,7 +2,7 @@
   function isCouchEditableEvent(event) {
     const path = event.composedPath();
     const isCouchControl = path.some((node) =>
-      node instanceof HTMLElement && node.id === 'watch-party-host'
+      node instanceof HTMLElement && node.id === 'couch'
     );
     const isEditable = path.some((node) =>
       node instanceof HTMLInputElement ||
