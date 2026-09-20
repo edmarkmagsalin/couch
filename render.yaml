@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: couch-server
+    runtime: node
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm dev:node
+    healthCheckPath: /health

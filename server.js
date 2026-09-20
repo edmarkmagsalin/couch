@@ -11,8 +11,14 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
+app.get('/health', (_request, response) => {
+  response.json({ status: 'ok' });
+});
+
 // In-memory state store now holds video state AND recent chat history
 const roomStates = {}; 
+const emptyRoomTimers = {};
+const ROOM_RECONNECT_GRACE_MS = 60 * 1000;
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
@@ -28,7 +34,11 @@ io.on('connection', (socket) => {
     }
 
     socket.join(roomId);
-    console.log(`${username} (${socket.id}) joined room ${roomId}`);
+
+    if (emptyRoomTimers[roomId]) {
+      clearTimeout(emptyRoomTimers[roomId]);
+      delete emptyRoomTimers[roomId];
+    }
 
     if (!roomStates[roomId]) {
       roomStates[roomId] = {
@@ -44,17 +54,24 @@ io.on('connection', (socket) => {
       roomStates[roomId].users = [];
     }
 
-    // Prevent duplicate entries if a socket re-triggers
-    if (!roomStates[roomId].users.some(u => u.socketId === socket.id)) {
+    // Check if this specific socket/user is already registered in the room
+    const userExists = roomStates[roomId].users.some(u => u.socketId === socket.id);
+
+    if (!userExists) {
       roomStates[roomId].users.push({ socketId: socket.id, username });
       
-      // Push and emit join message only once
       const systemMessage = { sender: 'System', text: `${username} joined the party.`, time: Date.now() };
       roomStates[roomId].chatHistory.push(systemMessage);
-      io.in(roomId).emit('new-message', systemMessage);
-    }
+      
+      // Send current room state to the joining user
+      socket.emit('sync-room', roomStates[roomId]);
 
-    socket.emit('sync-room', roomStates[roomId]);
+      // Broadcast the join message ONLY to other existing members in the room
+      socket.to(roomId).emit('new-message', systemMessage);
+    } else {
+      // If already joined, just re-sync state without adding a duplicate system message
+      socket.emit('sync-room', roomStates[roomId]);
+    }
 
     if (typeof callback === 'function') {
       callback({ success: true, host: roomStates[roomId].host });
@@ -79,8 +96,14 @@ io.on('connection', (socket) => {
     
     // 4. If room is empty, delete it completely
     if (room.users.length === 0) {
-      delete roomStates[roomId];
-      console.log(`Room ${roomId} has 0 participants and was deleted from memory.`);
+      emptyRoomTimers[roomId] = setTimeout(() => {
+        if (roomStates[roomId]?.users.length === 0) {
+          delete roomStates[roomId];
+          delete emptyRoomTimers[roomId];
+          console.log(`Room ${roomId} expired after the reconnect grace period.`);
+        }
+      }, ROOM_RECONNECT_GRACE_MS);
+      console.log(`Room ${roomId} has 0 participants and is available for reconnecting for 60 seconds.`);
       return;
     }
 
@@ -110,45 +133,6 @@ io.on('connection', (socket) => {
       io.in(roomId).emit('new-message', systemMessage);
     }
   }
-
-  socket.on('join-room', ({ roomId, username, action }, callback) => {
-    if (action === 'join' && !roomStates[roomId]) {
-      if (typeof callback === 'function') {
-        callback({ success: false, message: 'Room does not exist!' });
-      }
-      return; 
-    }
-
-    socket.join(roomId);
-    console.log(`${username} (${socket.id}) joined room ${roomId}`);
-
-    // Initialize room state if it doesn't exist
-    if (!roomStates[roomId]) {
-      roomStates[roomId] = {
-        video: { status: 'paused', timestamp: 0 },
-        chatHistory: [],
-        host: username,
-        hostSocketId: socket.id, // Explicit tracking
-        users: [] 
-      };
-    }
-
-    if (!Array.isArray(roomStates[roomId].users)) {
-      roomStates[roomId].users = [];
-    }
-
-    roomStates[roomId].users.push({ socketId: socket.id, username });
-
-    socket.emit('sync-room', roomStates[roomId]);
-
-    const systemMessage = { sender: 'System', text: `${username} joined the party.`, time: Date.now() };
-    roomStates[roomId].chatHistory.push(systemMessage);
-    io.in(roomId).emit('new-message', systemMessage);
-
-    if (typeof callback === 'function') {
-      callback({ success: true, host: roomStates[roomId].host });
-    }
-  });
 
   // --- LEAVE ROOM EVENT ---
   socket.on('leave-room', ({ roomId, username }) => {
@@ -227,6 +211,8 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3000, () => {
-  console.log('Watch Party & Chat Server running on port 3000');
+const port = process.env.PORT || 3000;
+
+server.listen(port, () => {
+  console.log(`Watch Party & Chat Server running on port ${port}`);
 });
