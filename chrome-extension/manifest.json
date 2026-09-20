@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Couch",
+  "version": "1.0",
+  "description": "Real-time synchronized video playback and chat.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["socket.io.js", "content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
