@@ -1,5 +1,5 @@
 // 1. Setup Variables
-const socket = io('http://localhost:3000');
+const socket = io('https://township-forestry-contributed-signed.trycloudflare.com');
 let isRemoteUpdate = false;
 let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
