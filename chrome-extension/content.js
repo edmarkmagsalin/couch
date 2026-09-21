@@ -140,7 +140,6 @@ shadow.innerHTML = `
       background-color: rgb(255 255 255 / 10%);
       backdrop-filter: blur(20px);
       border-radius: 12px;
-      padding: .5rem;
     }
 
     :host(:hover) section,
@@ -194,18 +193,21 @@ shadow.innerHTML = `
 
     .btn.small {
       font-size: 0.6rem;
+      padding: .2rem;
     }
 
     header { 
-      cursor: grab; 
+      cursor: all-scroll;
       padding: 5px; 
       user-select: none; 
       font-family: sans-serif;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      border-radius: 12px 12px 0 0;
+      padding: .5rem;
     }
-    header:active { cursor: grabbing; }
+    header:active { cursor: all-scroll; }
 
     .view-toggle-btn {
       padding: 0 4px;
@@ -235,7 +237,7 @@ shadow.innerHTML = `
       display: flex;
       flex-direction: column;
       gap: 4px;
-      padding: 6px;
+      padding: .5rem;
       cursor: default;
     }
 
@@ -263,8 +265,6 @@ shadow.innerHTML = `
     .room-header { 
       font-size: 12px; 
       padding: 4px 5px; 
-      border-top: 1px solid rgb(255 255 255 / 10%);
-      border-bottom: 1px solid rgb(255 255 255 / 10%);
       font-family: monospace; 
       display: flex; 
       justify-content: space-between;
@@ -273,6 +273,8 @@ shadow.innerHTML = `
 
     /* Message List & Scrollable Area */
     #messages {
+      border-top: 1px solid rgb(255 255 255 / 10%);
+      border-bottom: 1px solid rgb(255 255 255 / 10%);
       list-style-type: none;
       margin: 0;
       padding: 10px;
@@ -320,10 +322,21 @@ shadow.innerHTML = `
       font-size: 0.6rem;
       opacity: 0.5;
     }
+    #drag-handle {
+      background-color: rgb(255 255 255 / 10%);
+    }
+    .emoji-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5rem;
+      padding: 2px;
+      border-radius: 4px;
+    }
   </style>
   <section>
     <header id="drag-handle">
-      <span>⠿ couch 🛋</span>
+      <span>couch 🛋</span>
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
     
@@ -343,8 +356,8 @@ shadow.innerHTML = `
     <!-- CHAT VIEW -->
     <div id="chat-container">
       <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: 12px;">
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span>Room: <strong id="display-room-id">...</strong></span>
+        <div style="display: flex; align-items: center;">
+          <span><strong id="display-room-id">...</strong></span>
           <!-- NEW: Copy Room Code Button -->
           <button id="copy-code-btn" style="background: none; border:none; cursor: pointer; font-size: 10px;" title="Copy Room Code">📋</button>
         </div>
@@ -353,22 +366,25 @@ shadow.innerHTML = `
       <main><ul id="messages"></ul></main>
       <footer>
         <!-- Toolbar containing Emojis and Timestamp Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem .5rem;">
           <div id="emoji-bar" style="display: flex; gap: 6px;">
-            <button class="emoji-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 4px;" title="Laugh">😆</button>
-            <button class="emoji-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 4px;" title="Heart">♥️</button>
-            <button class="emoji-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 4px;" title="Splash">💦</button>
-            <button class="emoji-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 4px;" title="Surprise">😲</button>
-            <button class="emoji-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 4px;" title="Clap">👏</button>
+            <button class="emoji-btn" title="Laugh">😆</button>
+            <button class="emoji-btn" title="Heart">♥️</button>
+            <button class="emoji-btn" title="Splash">💦</button>
+            <button class="emoji-btn" title="Surprise">😲</button>
+            <button class="emoji-btn" title="Clap">👏</button>
           </div>
           
           <!-- NEW: Timestamp Button -->
-          <button id="timestamp-btn" class="btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 4px;" title="Share current video timestamp">⏱️</button>
+          <button id="timestamp-btn" class="emoji-btn" title="Share current video timestamp">⏱️</button>
         </div>
         
-        <form id="chat-form" style="display: flex; gap: 5px;">
-          <input type="text" id="chat-input" placeholder="Type..." autocomplete="off" required />
-        </form>
+        
+        <div style="padding: 0 .5rem .5rem .5rem;">
+          <form id="chat-form" style="display: flex;">
+            <input type="text" id="chat-input" placeholder="Type..." autocomplete="off" required />
+          </form>
+        </div>
       </footer>
     </div>
 
@@ -440,6 +456,10 @@ viewToggleBtn.addEventListener('mousedown', (e) => {
   e.stopPropagation();
 });
 
+compactView.addEventListener('click', () => {
+  showFullView();
+});
+
 viewToggleBtn.addEventListener('click', () => {
   if (isCompactView) {
     showFullView();
@@ -496,6 +516,8 @@ document.addEventListener('mouseup', () => {
   isDragging = false;
   snapToEdge();
 });
+
+window.addEventListener('resize', snapToEdge);
 
 // 5. Chat Logic
 const messageList = shadow.getElementById('messages');
@@ -657,11 +679,17 @@ leaveRoomBtn.addEventListener('click', () => {
 // Grab the new timestamp elements
 const timestampBtn = shadow.getElementById('timestamp-btn');
 
-// Helper to format seconds into MM:SS
+// Helper to format seconds into M:SS or H:MM:SS
 function formatTimestamp(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  const secondsText = secs.toString().padStart(2, '0');
+
+  return hours > 0
+    ? `${hours}:${mins.toString().padStart(2, '0')}:${secondsText}`
+    : `${mins}:${secondsText}`;
 }
 
 // --- FEATURE: SHARE VIDEO TIMESTAMP ---

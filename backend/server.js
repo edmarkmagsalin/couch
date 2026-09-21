@@ -172,11 +172,16 @@ io.on('connection', (socket) => {
 
     if (!room || !participant || !actionText || !Number.isFinite(timestamp)) return;
 
-    const minutes = Math.floor(timestamp / 60);
-    const seconds = Math.floor(timestamp % 60).toString().padStart(2, '0');
+    const totalSeconds = Math.floor(timestamp);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const timestampText = hours > 0
+      ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      : `${minutes}:${seconds.toString().padStart(2, '0')}`;
     const systemMessage = {
       sender: 'System',
-      text: `${participant.username} ${actionText} at ${minutes}:${seconds}.`,
+      text: `${participant.username} ${actionText} at ${timestampText}.`,
       time: Date.now()
     };
 

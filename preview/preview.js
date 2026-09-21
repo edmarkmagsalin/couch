@@ -6,6 +6,18 @@ const storage = {
 const runtimeListeners = [];
 const socketListeners = new Map();
 
+function formatTimestamp(seconds) {
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+  const secondsText = remainingSeconds.toString().padStart(2, '0');
+
+  return hours > 0
+    ? `${hours}:${minutes.toString().padStart(2, '0')}:${secondsText}`
+    : `${minutes}:${secondsText}`;
+}
+
 window.chrome = {
   storage: {
     local: {
@@ -46,11 +58,9 @@ window.io = () => ({
         pause: 'paused playback',
         seek: 'changed the playback time'
       }[data.action];
-      const minutes = Math.floor(data.timestamp / 60);
-      const seconds = Math.floor(data.timestamp % 60).toString().padStart(2, '0');
       dispatchSocketEvent('new-message', {
         sender: 'System',
-        text: `${data.username} ${actionText} at ${minutes}:${seconds}.`,
+        text: `${data.username} ${actionText} at ${formatTimestamp(data.timestamp)}.`,
         time: Date.now()
       });
     }
