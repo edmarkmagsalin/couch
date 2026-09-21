@@ -1,8 +1,6 @@
 // 1. Setup Variables
-const socketUrl = chrome.runtime.getManifest?.().version_name === 'development'
-  ? 'http://localhost:3000'
-  : 'https://couch-sl1x.onrender.com';
-const socket = io(socketUrl);
+// const socket = io('https://couch-sl1x.onrender.com');
+const socket = io('http://localhost:3000');
 let isRemoteUpdate = false;
 let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
@@ -26,10 +24,37 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8);
 }
 // 2. Video Hijacking Logic
-function findVideoElement() {
-  const video = document.querySelector('video');
+let activeVideo = null;
 
-  return video;
+function isVisibleVideo(video) {
+  const rect = video.getBoundingClientRect();
+  const style = getComputedStyle(video);
+
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    style.display !== 'none' &&
+    style.visibility !== 'hidden'
+  );
+}
+
+function isActivelyPlaying(video) {
+  return (
+    video instanceof HTMLVideoElement &&
+    !video.paused &&
+    !video.ended &&
+    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+  );
+}
+
+function findVideoElement() {
+  if (isActivelyPlaying(activeVideo)) return activeVideo;
+
+  const videos = [...document.querySelectorAll('video')].filter(isVisibleVideo);
+
+  return videos.sort((first, second) => (
+    second.clientWidth * second.clientHeight - first.clientWidth * first.clientHeight
+  ))[0] || null;
 }
 
 let hookedVideo = null;
@@ -125,6 +150,12 @@ function hookVideo(video) {
     pendingVideoState = null;
   }
 }
+
+document.addEventListener('playing', (event) => {
+  if (!(event.target instanceof HTMLVideoElement)) return;
+  activeVideo = event.target;
+  hookVideo(activeVideo);
+}, true);
 
 setInterval(() => hookVideo(findVideoElement()), 500);
 

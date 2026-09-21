@@ -2,7 +2,6 @@
   "manifest_version": 3,
   "name": "Couch",
   "version": "1.0",
-  "version_name": "development",
   "description": "Real-time synchronized video playback and chat.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
@@ -11,7 +10,9 @@
     "https://cinejoy.pk/*",
     "https://*.cinejoy.pk/*",
     "https://cinegram.tv/*",
-    "https://*.cinegram.tv/*"
+    "https://*.cinegram.tv/*",
+    "https://www.pornhub.com/*",
+    "https://*.pornhub.com/*"
   ],
   "action": {
     "default_title": "Show or hide Couch"
@@ -27,7 +28,9 @@
         "https://cinejoy.pk/*",
         "https://*.cinejoy.pk/*",
         "https://cinegram.tv/*",
-        "https://*.cinegram.tv/*"
+        "https://*.cinegram.tv/*",
+        "https://www.pornhub.com/*",
+        "https://*.pornhub.com/*"
       ],
       "js": ["keyboard-guard.js"],
       "run_at": "document_start",
@@ -40,7 +43,9 @@
         "https://cinejoy.pk/*",
         "https://*.cinejoy.pk/*",
         "https://cinegram.tv/*",
-        "https://*.cinegram.tv/*"
+        "https://*.cinegram.tv/*",
+        "https://www.pornhub.com/*",
+        "https://*.pornhub.com/*"
       ],
       "js": ["socket.io.js", "content.js"],
       "run_at": "document_end"
