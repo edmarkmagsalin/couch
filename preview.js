@@ -58,7 +58,7 @@ function loadContentScript() {
   const script = document.createElement('script');
   script.src = 'chrome-extension/content.js';
   script.onload = () => {
-    document.getElementById('status').textContent = 'Ready. Click Toggle Couch to show the Shadow DOM UI.';
+    document.getElementById('status').textContent = 'Ready. Use the expand button in the Couch header.';
   };
   script.onerror = () => {
     document.getElementById('status').textContent = 'Could not load chrome-extension/content.js.';
@@ -67,12 +67,8 @@ function loadContentScript() {
 }
 
 function shadowRoot() {
-  return document.getElementById('watch-party-host')?.shadowRoot;
+  return document.getElementById('couch')?.shadowRoot;
 }
-
-document.getElementById('toggle-couch').addEventListener('click', () => {
-  sendRuntimeMessage({ type: 'toggle-chat' });
-});
 
 document.getElementById('simulate-message').addEventListener('click', () => {
   dispatchSocketEvent('new-message', {

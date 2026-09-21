@@ -1,10 +1,13 @@
 // 1. Setup Variables
-const socket = io('https://couch-sl1x.onrender.com');
-// const socket = io('http://localhost:3000');
+const socketUrl = chrome.runtime.getManifest?.().version_name === 'development'
+  ? 'http://localhost:3000'
+  : 'https://couch-sl1x.onrender.com';
+const socket = io(socketUrl);
 let isRemoteUpdate = false;
 let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
 let currentHost = null; // Track current room host
+let isCompactView = true;
 
 const sessionReady = chrome.storage.local.get(['couch_username', 'couch_room']).then((session) => {
   myUsername = session.couch_username || localStorage.getItem('couch_username');
@@ -24,7 +27,7 @@ function generateRoomCode() {
 }
 // 2. Video Hijacking Logic
 function findVideoElement() {
-  const video = document.querySelector("body > div:nth-child(1) > div.app-shell > div > div > video") || document.querySelector('video');
+  const video = document.querySelector('video');
 
   return video;
 }
@@ -107,7 +110,7 @@ socket.on('seek-video', (data) => {
 const hostContainer = document.createElement('div');
 hostContainer.id = 'couch';
 hostContainer.style.cssText = `
-  position: fixed; top: 20px; right: 20px; width: 250px;
+  display: block; position: fixed; top: 20px; right: 20px; width: 250px;
   z-index: 9999999; background-color: rgb(255 255 255 / 10%);
   backdrop-filter: blur(20px); border-radius: 12px; padding: .5rem;
 `;
@@ -115,6 +118,18 @@ hostContainer.style.cssText = `
 const shadow = hostContainer.attachShadow({ mode: 'open' });
 shadow.innerHTML = `
   <style>
+    :host {
+      opacity: 0.2;
+      transition: opacity 160ms ease;
+    }
+
+    :host(:hover),
+    :host(:focus-within),
+    :host(.is-focused),
+    :host(:active) {
+      opacity: 1;
+    }
+
     * {
       color: rgb(255 255 255 / 75%);
       font-family: sans-serif; 
@@ -162,13 +177,26 @@ shadow.innerHTML = `
       padding: 5px; 
       user-select: none; 
       font-family: sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
     header:active { cursor: grabbing; }
+
+    .view-toggle-btn {
+      padding: 0 4px;
+      cursor: pointer;
+      color: rgb(255 255 255 / 75%);
+      border: 0;
+      background: transparent;
+      font-size: 10px;
+      line-height: 1;
+    }
 
     /* Lobby Styles */
     #lobby {
       padding: 15px;
-      display: flex;
+      display: none;
       flex-direction: column;
       gap: 10px;
     }
@@ -177,6 +205,35 @@ shadow.innerHTML = `
     #chat-container { 
       display: none; 
       flex-direction: column; 
+    }
+
+    #compact-view {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 6px;
+      cursor: default;
+    }
+
+    #compact-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 34px;
+      overflow: hidden;
+    }
+
+    .compact-title {
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .compact-message {
+      overflow: hidden;
+      font-size: 10px;
+      line-height: 15px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .room-header { 
@@ -241,7 +298,10 @@ shadow.innerHTML = `
     }
   </style>
   <section>
-    <header id="drag-handle">⠿ Couch</header>
+    <header id="drag-handle">
+      <span>⠿ Couch</span>
+      <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
+    </header>
     
     <!-- LOBBY VIEW -->
     <div id="lobby">
@@ -287,15 +347,49 @@ shadow.innerHTML = `
         </form>
       </footer>
     </div>
+
+    <div id="compact-view" title="Open Couch">
+      <div id="compact-messages"></div>
+    </div>
   </section>
 `;
 document.body.appendChild(hostContainer);
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type !== 'toggle-chat') return;
+const compactView = shadow.getElementById('compact-view');
+const compactMessages = shadow.getElementById('compact-messages');
+const viewToggleBtn = shadow.getElementById('view-toggle-btn');
 
-  hostContainer.style.display = hostContainer.style.display === 'none' ? 'block' : 'none';
-});
+shadow.addEventListener('focus', () => hostContainer.classList.add('is-focused'), true);
+shadow.addEventListener('blur', () => {
+  setTimeout(() => {
+    if (!shadow.activeElement) hostContainer.classList.remove('is-focused');
+  }, 0);
+}, true);
+
+function updateViewToggleButton() {
+  const action = isCompactView ? 'Expand' : 'Collapse';
+  viewToggleBtn.textContent = isCompactView ? '▼' : '▲';
+  viewToggleBtn.title = `${action} Couch`;
+  viewToggleBtn.setAttribute('aria-label', `${action} Couch`);
+}
+
+function showFullView() {
+  isCompactView = false;
+  updateViewToggleButton();
+  hostContainer.style.display = 'block';
+  compactView.style.display = 'none';
+  lobbyView.style.display = currentRoom ? 'none' : 'flex';
+  chatContainer.style.display = currentRoom ? 'flex' : 'none';
+}
+
+function showCompactView() {
+  isCompactView = true;
+  updateViewToggleButton();
+  hostContainer.style.display = 'block';
+  chatContainer.style.display = 'none';
+  lobbyView.style.display = 'none';
+  compactView.style.display = 'flex';
+}
 
 // 4. Drag Logic
 const dragHandle = shadow.getElementById('drag-handle');
@@ -308,6 +402,20 @@ dragHandle.addEventListener('mousedown', (e) => {
   dragStartY = e.clientY - rect.top;
 });
 
+viewToggleBtn.addEventListener('mousedown', (e) => {
+  e.stopPropagation();
+});
+
+viewToggleBtn.addEventListener('click', () => {
+  if (isCompactView) {
+    showFullView();
+  } else {
+    showCompactView();
+  }
+});
+
+updateViewToggleButton();
+
 document.addEventListener('mousemove', (e) => {
   if (!isDragging) return;
   hostContainer.style.right = 'auto';
@@ -316,7 +424,44 @@ document.addEventListener('mousemove', (e) => {
   hostContainer.style.top = `${e.clientY - dragStartY}px`;
 });
 
-document.addEventListener('mouseup', () => isDragging = false);
+function snapToEdge() {
+  const rect = hostContainer.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const edgeGap = 12;
+  const edges = [
+    { name: 'top', distance: rect.top },
+    { name: 'left', distance: rect.left },
+    { name: 'right', distance: viewportWidth - rect.right }
+  ];
+  const nearestEdge = edges.reduce((nearest, edge) => (
+    edge.distance < nearest.distance ? edge : nearest
+  ));
+  const maxLeft = Math.max(edgeGap, viewportWidth - rect.width - edgeGap);
+  const maxTop = Math.max(edgeGap, viewportHeight - rect.height - edgeGap);
+  const currentLeft = Math.min(Math.max(rect.left, edgeGap), maxLeft);
+  const currentTop = Math.min(Math.max(rect.top, edgeGap), maxTop);
+
+  hostContainer.style.right = 'auto';
+  hostContainer.style.bottom = 'auto';
+
+  if (nearestEdge.name === 'top') {
+    hostContainer.style.left = `${currentLeft}px`;
+    hostContainer.style.top = `${edgeGap}px`;
+  } else if (nearestEdge.name === 'left') {
+    hostContainer.style.left = `${edgeGap}px`;
+    hostContainer.style.top = `${currentTop}px`;
+  } else {
+    hostContainer.style.left = `${viewportWidth - rect.width - edgeGap}px`;
+    hostContainer.style.top = `${currentTop}px`;
+  }
+}
+
+document.addEventListener('mouseup', () => {
+  if (!isDragging) return;
+  isDragging = false;
+  snapToEdge();
+});
 
 // 5. Chat Logic
 const messageList = shadow.getElementById('messages');
@@ -327,6 +472,10 @@ function appendMessage(sender, text) {
   const messageList = shadow.getElementById('messages');
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
+
+  const compactRow = document.createElement('div');
+  compactRow.className = 'compact-message';
+  compactRow.textContent = `${sender}: ${text}`;
 
   // 1. System Announcements
   if (sender === 'System') {
@@ -350,6 +499,10 @@ function appendMessage(sender, text) {
   }
 
   messageList.appendChild(rowDiv);
+  compactMessages.appendChild(compactRow);
+  while (compactMessages.children.length > 2) {
+    compactMessages.firstElementChild.remove();
+  }
 
   // Directly scroll the message list to the bottom
   requestAnimationFrame(() => {
@@ -404,7 +557,7 @@ function showRoom(roomId) {
   currentRoom = roomId;
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
-  chatContainer.style.display = 'flex';
+  chatContainer.style.display = isCompactView ? 'none' : 'flex';
 }
 
 function joinRoom(roomId, action = 'join') {
@@ -454,6 +607,7 @@ leaveRoomBtn.addEventListener('click', () => {
   socket.emit('leave-room', { roomId: currentRoom, username: myUsername });
 
   messageList.innerHTML = '';
+  compactMessages.innerHTML = '';
   currentRoom = null;
   chrome.storage.local.remove('couch_room');
   updateLobbyButtons();
@@ -524,6 +678,7 @@ socket.on('sync-room', (state) => {
   
   // Render existing chat history...
   messageList.innerHTML = '';
+  compactMessages.innerHTML = '';
   state.chatHistory.forEach(msg => appendMessage(msg.sender, msg.text));
 });
 
