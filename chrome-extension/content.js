@@ -299,7 +299,7 @@ shadow.innerHTML = `
   </style>
   <section>
     <header id="drag-handle">
-      <span>⠿ Couch</span>
+      <span>⠿ couch 🛋</span>
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
     
