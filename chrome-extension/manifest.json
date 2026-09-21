@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Couch",
   "version": "1.0",
+  "version_name": "development",
   "description": "Real-time synchronized video playback and chat.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [

@@ -39,6 +39,21 @@ window.io = () => ({
         ]
       }), 0);
     }
+
+    if (event === 'video-action') {
+      const actionText = {
+        play: 'resumed playback',
+        pause: 'paused playback',
+        seek: 'changed the playback time'
+      }[data.action];
+      const minutes = Math.floor(data.timestamp / 60);
+      const seconds = Math.floor(data.timestamp % 60).toString().padStart(2, '0');
+      dispatchSocketEvent('new-message', {
+        sender: 'System',
+        text: `${data.username} ${actionText} at ${minutes}:${seconds}.`,
+        time: Date.now()
+      });
+    }
   },
   on: (event, listener) => {
     if (!socketListeners.has(event)) socketListeners.set(event, []);

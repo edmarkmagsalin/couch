@@ -161,6 +161,30 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('seek-video', { timestamp });
   });
 
+  socket.on('video-action', ({ roomId, action, timestamp }) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    const actionText = {
+      play: 'resumed playback',
+      pause: 'paused playback',
+      seek: 'changed the playback time'
+    }[action];
+
+    if (!room || !participant || !actionText || !Number.isFinite(timestamp)) return;
+
+    const minutes = Math.floor(timestamp / 60);
+    const seconds = Math.floor(timestamp % 60).toString().padStart(2, '0');
+    const systemMessage = {
+      sender: 'System',
+      text: `${participant.username} ${actionText} at ${minutes}:${seconds}.`,
+      time: Date.now()
+    };
+
+    if (room.chatHistory.length >= 50) room.chatHistory.shift();
+    room.chatHistory.push(systemMessage);
+    io.in(roomId).emit('new-message', systemMessage);
+  });
+
   // --- CHAT EVENTS ---
   socket.on('send-message', ({ roomId, username, text }) => {
     // NEW: Log exactly what the server receives!

@@ -60,19 +60,31 @@ function hookVideo(video) {
   hookedVideo = video;
   console.log('Watch Party: Video element found and hooked!');
 
+  function announceVideoAction(action) {
+    socket.emit('video-action', {
+      roomId: currentRoom,
+      username: myUsername,
+      action,
+      timestamp: video.currentTime
+    });
+  }
+
   video.addEventListener('play', () => {
     if (!currentRoom || isRemoteUpdate || video !== hookedVideo) return;
     socket.emit('play-video', { roomId: currentRoom, timestamp: video.currentTime });
+    announceVideoAction('play');
   });
 
   video.addEventListener('pause', () => {
     if (!currentRoom || isRemoteUpdate || video !== hookedVideo) return;
     socket.emit('pause-video', { roomId: currentRoom, timestamp: video.currentTime });
+    announceVideoAction('pause');
   });
 
   video.addEventListener('seeked', () => {
     if (!currentRoom || isRemoteUpdate || video !== hookedVideo) return;
     socket.emit('seek-video', { roomId: currentRoom, timestamp: video.currentTime });
+    announceVideoAction('seek');
   });
 
   if (pendingVideoState) {
@@ -111,22 +123,34 @@ const hostContainer = document.createElement('div');
 hostContainer.id = 'couch';
 hostContainer.style.cssText = `
   display: block; position: fixed; top: 20px; right: 20px; width: 250px;
-  z-index: 9999999; background-color: rgb(255 255 255 / 10%);
-  backdrop-filter: blur(20px); border-radius: 12px; padding: .5rem;
+  z-index: 9999999;
 `;
 
 const shadow = hostContainer.attachShadow({ mode: 'open' });
 shadow.innerHTML = `
   <style>
     :host {
-      opacity: 0.2;
-      transition: opacity 160ms ease;
+      display: block;
     }
 
-    :host(:hover),
-    :host(:focus-within),
-    :host(.is-focused),
-    :host(:active) {
+    section {
+      box-sizing: border-box;
+      width: 100%;
+      opacity: 0.2;
+      background-color: rgb(255 255 255 / 10%);
+      backdrop-filter: blur(20px);
+      border-radius: 12px;
+      padding: .5rem;
+    }
+
+    :host(:hover) section,
+    :host(:focus-within) section,
+    :host(.is-focused) section,
+    :host(:active) section {
+      opacity: 1;
+    }
+
+    section.has-new-message {
       opacity: 1;
     }
 
@@ -358,6 +382,8 @@ document.body.appendChild(hostContainer);
 const compactView = shadow.getElementById('compact-view');
 const compactMessages = shadow.getElementById('compact-messages');
 const viewToggleBtn = shadow.getElementById('view-toggle-btn');
+const couchSection = shadow.querySelector('section');
+let newMessageOpacityTimer;
 
 shadow.addEventListener('focus', () => hostContainer.classList.add('is-focused'), true);
 shadow.addEventListener('blur', () => {
@@ -365,6 +391,14 @@ shadow.addEventListener('blur', () => {
     if (!shadow.activeElement) hostContainer.classList.remove('is-focused');
   }, 0);
 }, true);
+
+function highlightNewMessage() {
+  couchSection.classList.add('has-new-message');
+  clearTimeout(newMessageOpacityTimer);
+  newMessageOpacityTimer = setTimeout(() => {
+    couchSection.classList.remove('has-new-message');
+  }, 2000);
+}
 
 function updateViewToggleButton() {
   const action = isCompactView ? 'Expand' : 'Collapse';
@@ -663,7 +697,10 @@ chatForm.addEventListener('submit', (e) => {
   chatInput.value = '';
 });
 
-socket.on('new-message', (data) => appendMessage(data.sender, data.text));
+socket.on('new-message', (data) => {
+  appendMessage(data.sender, data.text);
+  highlightNewMessage();
+});
 socket.on('sync-room', (state) => {
   currentHost = state.host;
   pendingVideoState = state.video || null;
