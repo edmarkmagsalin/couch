@@ -64,6 +64,14 @@ window.io = () => ({
         time: Date.now()
       });
     }
+
+    if (event === 'media-change') {
+      dispatchSocketEvent('new-message', {
+        sender: 'System',
+        text: `${data.username || 'Preview User'} is playing "${data.title}".`,
+        time: Date.now()
+      });
+    }
   },
   on: (event, listener) => {
     if (!socketListeners.has(event)) socketListeners.set(event, []);

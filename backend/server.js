@@ -161,6 +161,25 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('seek-video', { timestamp });
   });
 
+  socket.on('media-change', ({ roomId, title, mediaKey }) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    const trimmedTitle = typeof title === 'string' ? title.trim() : '';
+    const trimmedMediaKey = typeof mediaKey === 'string' ? mediaKey.trim() : '';
+
+    if (!room || !participant || !trimmedTitle || !trimmedMediaKey) return;
+
+    const systemMessage = {
+      sender: 'System',
+      text: `${participant.username} is playing "${trimmedTitle}".`,
+      time: Date.now()
+    };
+
+    if (room.chatHistory.length >= 50) room.chatHistory.shift();
+    room.chatHistory.push(systemMessage);
+    io.in(roomId).emit('new-message', systemMessage);
+  });
+
   socket.on('video-action', ({ roomId, action, timestamp }) => {
     const room = roomStates[roomId];
     const participant = room?.users.find(user => user.socketId === socket.id);

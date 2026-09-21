@@ -34,6 +34,30 @@ function findVideoElement() {
 
 let hookedVideo = null;
 let pendingVideoState = null;
+let lastAnnouncedMediaKey = null;
+
+function getVideoTitle(video) {
+  const elementTitle = video.getAttribute('title')?.trim();
+  if (elementTitle) return elementTitle;
+
+  const pageTitle = document.title.trim();
+  return pageTitle.replace(/\s*[|-]\s*(YouTube|Cinejoy|Cinegram)\s*$/i, '').trim() || 'Untitled video';
+}
+
+function announceMediaChange(video) {
+  if (!currentRoom || video !== hookedVideo) return;
+
+  const mediaKey = video.currentSrc || video.src || getVideoTitle(video);
+  if (mediaKey === lastAnnouncedMediaKey) return;
+  lastAnnouncedMediaKey = mediaKey;
+
+  socket.emit('media-change', {
+    roomId: currentRoom,
+    username: myUsername,
+    title: getVideoTitle(video),
+    mediaKey
+  });
+}
 
 function applyVideoTime(video, timestamp) {
   isRemoteUpdate = true;
@@ -86,6 +110,11 @@ function hookVideo(video) {
     socket.emit('seek-video', { roomId: currentRoom, timestamp: video.currentTime });
     announceVideoAction('seek');
   });
+
+  video.addEventListener('loadedmetadata', () => announceMediaChange(video));
+  video.addEventListener('emptied', () => { lastAnnouncedMediaKey = null; });
+
+  if (video.readyState >= 1) announceMediaChange(video);
 
   if (pendingVideoState) {
     if (pendingVideoState.status === 'seeking') {
@@ -198,14 +227,14 @@ shadow.innerHTML = `
 
     header { 
       cursor: all-scroll;
-      padding: 5px; 
       user-select: none; 
       font-family: sans-serif;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-radius: 12px 12px 0 0;
-      padding: .5rem;
+      padding: 0 .5rem;
+      background-color: rgb(255 255 255 / 10%);
     }
     header:active { cursor: all-scroll; }
 
@@ -322,9 +351,6 @@ shadow.innerHTML = `
       font-size: 0.6rem;
       opacity: 0.5;
     }
-    #drag-handle {
-      background-color: rgb(255 255 255 / 10%);
-    }
     .emoji-btn {
       background: none;
       border: none;
@@ -336,7 +362,7 @@ shadow.innerHTML = `
   </style>
   <section>
     <header id="drag-handle">
-      <span>couch 🛋</span>
+      <span style="font-size: 1.5rem;">🛋</span>
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
     
@@ -614,6 +640,7 @@ function showRoom(roomId) {
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
   chatContainer.style.display = isCompactView ? 'none' : 'flex';
+  if (hookedVideo?.readyState >= 1) announceMediaChange(hookedVideo);
 }
 
 function joinRoom(roomId, action = 'join') {
