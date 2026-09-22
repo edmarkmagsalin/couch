@@ -1,5 +1,4 @@
 // 1. Setup Variables
-// const socket = io('https://couch-sl1x.onrender.com');
 const socket = io('http://localhost:3000');
 let isRemoteUpdate = false;
 let myUsername = '';
