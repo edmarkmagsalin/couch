@@ -190,6 +190,15 @@ shadow.innerHTML = `
   <style>
     :host {
       display: block;
+      transition: transform 180ms ease;
+    }
+
+    :host(.docked-left) {
+      transform: translateX(calc(-100% + -25px));
+    }
+
+    :host(.docked-right) {
+      transform: translateX(calc(100% - -25px));
     }
 
     section {
@@ -276,6 +285,36 @@ shadow.innerHTML = `
       background: transparent;
       font-size: 10px;
       line-height: 1;
+    }
+
+    #edge-tab {
+      display: none;
+      position: absolute;
+      top: 50%;
+      width: 28px;
+      height: 56px;
+      padding: 0;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: white;
+      border: 1px solid rgb(255 255 255 / 20%);
+      background-color: rgb(255 255 255 / 10%);
+      font-size: 18px;
+    }
+
+    :host(.docked-left) #edge-tab,
+    :host(.docked-right) #edge-tab {
+      display: block;
+    }
+
+    :host(.docked-left) #edge-tab {
+      right: -40px;
+      border-radius: 0 8px 8px 0;
+    }
+
+    :host(.docked-right) #edge-tab {
+      left: -40px;
+      border-radius: 8px 0 0 8px;
     }
 
     /* Lobby Styles */
@@ -448,14 +487,28 @@ shadow.innerHTML = `
       <div id="compact-messages"></div>
     </div>
   </section>
+  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch">‹</button>
 `;
 document.body.appendChild(hostContainer);
+
+function syncFullscreenHost() {
+  const fullscreenElement = document.fullscreenElement;
+  const hostParent = fullscreenElement || document.body;
+
+  if (hostContainer.parentElement !== hostParent) {
+    hostParent.appendChild(hostContainer);
+  }
+}
+
+document.addEventListener('fullscreenchange', syncFullscreenHost);
 
 const compactView = shadow.getElementById('compact-view');
 const compactMessages = shadow.getElementById('compact-messages');
 const viewToggleBtn = shadow.getElementById('view-toggle-btn');
 const couchSection = shadow.querySelector('section');
+const edgeTab = shadow.getElementById('edge-tab');
 let newMessageOpacityTimer;
+let dockedEdge = null;
 
 shadow.addEventListener('focus', () => hostContainer.classList.add('is-focused'), true);
 shadow.addEventListener('blur', () => {
@@ -524,6 +577,26 @@ viewToggleBtn.addEventListener('click', () => {
   }
 });
 
+function setDockedEdge(edge) {
+  dockedEdge = edge;
+  hostContainer.classList.toggle('docked-left', edge === 'left');
+  hostContainer.classList.toggle('docked-right', edge === 'right');
+  edgeTab.textContent = edge === 'left' ? '›' : '‹';
+  edgeTab.title = 'Show Couch';
+  edgeTab.setAttribute('aria-label', 'Show Couch');
+}
+
+function restoreFromEdge() {
+  if (!dockedEdge) return;
+  setDockedEdge(null);
+}
+
+edgeTab.addEventListener('mousedown', (e) => {
+  e.stopPropagation();
+});
+
+edgeTab.addEventListener('click', restoreFromEdge);
+
 updateViewToggleButton();
 
 document.addEventListener('mousemove', (e) => {
@@ -535,10 +608,19 @@ document.addEventListener('mousemove', (e) => {
 });
 
 function snapToEdge() {
+  if (dockedEdge) {
+    hostContainer.style.left = dockedEdge === 'left'
+      ? '12px'
+      : `${window.innerWidth - hostContainer.offsetWidth - 12}px`;
+    return;
+  }
+
   const rect = hostContainer.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   const edgeGap = 12;
+  const atLeftEdge = rect.left <= edgeGap;
+  const atRightEdge = viewportWidth - rect.right <= edgeGap;
   const edges = [
     { name: 'top', distance: rect.top },
     { name: 'left', distance: rect.left },
@@ -561,9 +643,11 @@ function snapToEdge() {
   } else if (nearestEdge.name === 'left') {
     hostContainer.style.left = `${edgeGap}px`;
     hostContainer.style.top = `${currentTop}px`;
+    if (atLeftEdge) setDockedEdge('left');
   } else {
     hostContainer.style.left = `${viewportWidth - rect.width - edgeGap}px`;
     hostContainer.style.top = `${currentTop}px`;
+    if (atRightEdge) setDockedEdge('right');
   }
 }
 
