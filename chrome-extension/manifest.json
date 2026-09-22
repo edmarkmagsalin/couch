@@ -8,9 +8,7 @@
     "https://www.youtube.com/*",
     "https://youtube.com/*",
     "https://cinejoy.pk/*",
-    "https://*.cinejoy.pk/*",
-    "https://cinegram.tv/*",
-    "https://*.cinegram.tv/*"
+    "https://*.cinejoy.pk/*"
   ],
   "action": {
     "default_title": "Show or hide Couch"
@@ -24,9 +22,7 @@
         "https://www.youtube.com/*",
         "https://youtube.com/*",
         "https://cinejoy.pk/*",
-        "https://*.cinejoy.pk/*",
-        "https://cinegram.tv/*",
-        "https://*.cinegram.tv/*"
+        "https://*.cinejoy.pk/*"
       ],
       "js": ["keyboard-guard.js"],
       "run_at": "document_start",
@@ -37,9 +33,7 @@
         "https://www.youtube.com/*",
         "https://youtube.com/*",
         "https://cinejoy.pk/*",
-        "https://*.cinejoy.pk/*",
-        "https://cinegram.tv/*",
-        "https://*.cinegram.tv/*"
+        "https://*.cinejoy.pk/*"
       ],
       "js": ["socket.io.js", "content.js"],
       "run_at": "document_end"
