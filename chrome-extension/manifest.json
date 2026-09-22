@@ -10,9 +10,7 @@
     "https://cinejoy.pk/*",
     "https://*.cinejoy.pk/*",
     "https://cinegram.tv/*",
-    "https://*.cinegram.tv/*",
-    "https://www.pornhub.com/*",
-    "https://*.pornhub.com/*"
+    "https://*.cinegram.tv/*"
   ],
   "action": {
     "default_title": "Show or hide Couch"
@@ -28,9 +26,7 @@
         "https://cinejoy.pk/*",
         "https://*.cinejoy.pk/*",
         "https://cinegram.tv/*",
-        "https://*.cinegram.tv/*",
-        "https://www.pornhub.com/*",
-        "https://*.pornhub.com/*"
+        "https://*.cinegram.tv/*"
       ],
       "js": ["keyboard-guard.js"],
       "run_at": "document_start",
@@ -43,9 +39,7 @@
         "https://cinejoy.pk/*",
         "https://*.cinejoy.pk/*",
         "https://cinegram.tv/*",
-        "https://*.cinegram.tv/*",
-        "https://www.pornhub.com/*",
-        "https://*.pornhub.com/*"
+        "https://*.cinegram.tv/*"
       ],
       "js": ["socket.io.js", "content.js"],
       "run_at": "document_end"
