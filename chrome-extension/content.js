@@ -1,5 +1,5 @@
 // 1. Setup Variables
-const socket = io('http://localhost:3000');
+const socket = io('https://couch-sl1x.onrender.com');
 let isRemoteUpdate = false;
 let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
@@ -551,8 +551,8 @@ const compactMessages = shadow.getElementById('compact-messages');
 const viewToggleBtn = shadow.getElementById('view-toggle-btn');
 const couchSection = shadow.querySelector('section');
 const edgeTab = shadow.getElementById('edge-tab');
-let newMessageOpacityTimer;
 let blurOpacityTimer;
+let isMessageMainVisible = false;
 let dockedEdge = null;
 
 function clearBlurOpacityTimer() {
@@ -597,14 +597,10 @@ function highlightNewMessage() {
   showInteractiveOpacity();
   couchSection.classList.add('has-new-message');
   edgeTab.classList.add('has-new-message');
-  clearTimeout(newMessageOpacityTimer);
-  newMessageOpacityTimer = setTimeout(() => {
+  if (isMessageMainVisible) {
     couchSection.classList.remove('has-new-message');
     edgeTab.classList.remove('has-new-message');
-    if (!hostContainer.matches(':hover') && !shadow.activeElement) {
-      scheduleBlurOpacity();
-    }
-  }, 5000);
+  }
 }
 
 function updateViewToggleButton() {
@@ -751,6 +747,23 @@ window.addEventListener('resize', snapToEdge);
 const messageList = shadow.getElementById('messages');
 const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
+const messageMain = messageList.closest('main');
+
+const messagesVisibilityObserver = new IntersectionObserver(([entry]) => {
+  isMessageMainVisible = entry.isIntersecting;
+  if (!entry.isIntersecting) return;
+
+  requestAnimationFrame(() => {
+    messageList.scrollTop = messageList.scrollHeight;
+  });
+  couchSection.classList.remove('has-new-message');
+  edgeTab.classList.remove('has-new-message');
+  if (!hostContainer.matches(':hover') && !shadow.activeElement) {
+    scheduleBlurOpacity();
+  }
+}, { threshold: 0.1 });
+
+messagesVisibilityObserver.observe(messageMain);
 
 function buildLinkifiedText(messageText) {
   const safeText = String(messageText ?? '');
@@ -850,6 +863,8 @@ function emitLocalChatMessage(text) {
     username: myUsername,
     text: trimmedText
   });
+
+  requestAnimationFrame(() => chatInput.focus());
 }
 
 const lobbyView = shadow.getElementById('lobby');

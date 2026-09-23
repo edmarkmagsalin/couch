@@ -6,7 +6,7 @@
   "scripts": {
     "backend": "node backend/server.js",
     "preview": "node -e \"import('node:http').then(({createServer}) => import('node:fs').then(({createReadStream}) => createServer((req, res) => { const path = req.url === '/' ? 'preview/preview.html' : req.url.slice(1); createReadStream(path).on('error', () => { res.writeHead(404); res.end(); }).on('open', () => res.writeHead(200)).pipe(res); }).listen(4173, () => console.log('Preview running at http://localhost:4173'))) )\"",
-    "package": "test -f .env && set -a && . ./.env && set +a && test -n \"$COUCH_SERVER_URL\" && rm -rf .package-tmp dist && mkdir -p .package-tmp dist && cp -R chrome-extension .package-tmp/chrome-extension && sed -i '' \"s#http://localhost:3000#${COUCH_SERVER_URL}#g\" .package-tmp/chrome-extension/content.js && (cd .package-tmp/chrome-extension && zip -r ../../dist/couch-chrome-extension.zip .) && rm -rf .package-tmp",
+    "package": "test -f .env && set -a && . ./.env && set +a && test -n \"$COUCH_SERVER_URL\" && rm -rf .package-tmp dist && mkdir -p .package-tmp dist && cp -R chrome-extension .package-tmp/couch-chrome-extension && sed -i '' \"s#http://localhost:3000#${COUCH_SERVER_URL}#g\" .package-tmp/couch-chrome-extension/content.js && (cd .package-tmp && zip -r ../dist/couch-chrome-extension.zip couch-chrome-extension) && rm -rf .package-tmp",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
