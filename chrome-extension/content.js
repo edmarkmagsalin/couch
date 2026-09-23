@@ -158,22 +158,30 @@ document.addEventListener('playing', (event) => {
 
 setInterval(() => hookVideo(findVideoElement()), 500);
 
-socket.on('play-video', (data) => {
+function setPendingVideoState(status, timestamp) {
+  pendingVideoState = { status, timestamp };
   const video = findVideoElement();
-  pendingVideoState = { status: 'playing', timestamp: data.timestamp };
-  if (video) applyVideoState(video, pendingVideoState);
+
+  if (!video) return;
+
+  if (status === 'seeking') {
+    applyVideoTime(video, timestamp);
+    return;
+  }
+
+  applyVideoState(video, pendingVideoState);
+}
+
+socket.on('play-video', (data) => {
+  setPendingVideoState('playing', data.timestamp);
 });
 
 socket.on('pause-video', (data) => {
-  const video = findVideoElement();
-  pendingVideoState = { status: 'paused', timestamp: data.timestamp };
-  if (video) applyVideoState(video, pendingVideoState);
+  setPendingVideoState('paused', data.timestamp);
 });
 
 socket.on('seek-video', (data) => {
-  const video = findVideoElement();
-  pendingVideoState = { status: 'seeking', timestamp: data.timestamp };
-  if (video) applyVideoTime(video, data.timestamp);
+  setPendingVideoState('seeking', data.timestamp);
 });
 
 
@@ -740,7 +748,6 @@ const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
 
 function appendMessage(sender, text) {
-  const messageList = shadow.getElementById('messages');
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
 
@@ -748,36 +755,45 @@ function appendMessage(sender, text) {
   compactRow.className = 'compact-message';
   compactRow.textContent = `${sender}: ${text}`;
 
-  // 1. System Announcements
   if (sender === 'System') {
     rowDiv.classList.add('system');
     rowDiv.textContent = text;
-  } 
-  // 2. Current User Messages
-  else if (sender === 'You' || sender === myUsername) {
+  } else if (sender === 'You' || sender === myUsername) {
     rowDiv.classList.add('right');
     rowDiv.textContent = text;
-  } 
-  // 3. Other Users' Messages
-  else {
+  } else {
     rowDiv.classList.add('left');
-    const isHost = (sender === currentHost);
-    let senderHTML = `<b>${sender}</b>`;
-    if (isHost) {
-      senderHTML += ` <b><i>(host)</i></b>`;
-    }
-    rowDiv.innerHTML = `${senderHTML}: ${text}`;
+    const isHost = sender === currentHost;
+    const senderLabel = isHost ? `<b>${sender}</b> <b><i>(host)</i></b>` : `<b>${sender}</b>`;
+    rowDiv.innerHTML = `${senderLabel}: ${text}`;
   }
 
   messageList.appendChild(rowDiv);
   compactMessages.appendChild(compactRow);
+
   while (compactMessages.children.length > 2) {
     compactMessages.firstElementChild.remove();
   }
 
-  // Directly scroll the message list to the bottom
   requestAnimationFrame(() => {
     messageList.scrollTop = messageList.scrollHeight;
+  });
+}
+
+function clearChatHistory() {
+  messageList.innerHTML = '';
+  compactMessages.innerHTML = '';
+}
+
+function emitLocalChatMessage(text) {
+  const trimmedText = String(text ?? '').trim();
+  if (!trimmedText || !currentRoom) return;
+
+  appendMessage('You', trimmedText);
+  socket.emit('send-message', {
+    roomId: currentRoom,
+    username: myUsername,
+    text: trimmedText
   });
 }
 
@@ -794,36 +810,32 @@ const createRoomForm = shadow.getElementById('create-room-form');
 const displayHostName = shadow.getElementById('display-host-name');
 
 function updateLobbyButtons() {
-  createRoomBtn.disabled = !usernameInput.value.trim();
-  joinRoomBtn.disabled = !joinRoomInput.value.trim() || !usernameInput.value.trim();
+  const hasUsername = usernameInput.value.trim();
+  const hasRoomCode = joinRoomInput.value.trim();
+
+  createRoomBtn.disabled = !hasUsername;
+  joinRoomBtn.disabled = !hasUsername || !hasRoomCode;
 }
 
 usernameInput.addEventListener('input', updateLobbyButtons);
 joinRoomInput.addEventListener('input', updateLobbyButtons);
 
-// Grab the emoji bar element
 const emojiBar = shadow.getElementById('emoji-bar');
 
-// --- FEATURE 5: QUICK EMOJI BUTTONS ---
-emojiBar.addEventListener('click', (e) => {
-  // Check if the clicked target is one of our emoji buttons
-  if (e.target.classList.contains('emoji-btn')) {
-    const emoji = e.target.textContent;
-    if (!currentRoom) return;
+emojiBar.addEventListener('click', (event) => {
+  const emojiButton = event.target.closest('.emoji-btn');
+  if (!emojiButton) return;
 
-    // Immediately display and emit the emoji as a chat message
-    appendMessage('You', emoji);
-    socket.emit('send-message', { roomId: currentRoom, username: myUsername, text: emoji });
-  }
+  emitLocalChatMessage(emojiButton.textContent);
 });
 
 // Helper function to capture username changes right before entering a room
 function captureAndSaveUsername() {
   const typedName = usernameInput.value.trim();
-  if (typedName) {
-    myUsername = typedName;
-    chrome.storage.local.set({ couch_username: myUsername });
-  }
+  if (!typedName) return;
+
+  myUsername = typedName;
+  chrome.storage.local.set({ couch_username: myUsername });
 }
 
 function showRoom(roomId) {
@@ -831,7 +843,10 @@ function showRoom(roomId) {
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
   chatContainer.style.display = isCompactView ? 'none' : 'flex';
-  if (hookedVideo?.readyState >= 1) announceMediaChange(hookedVideo);
+
+  if (hookedVideo?.readyState >= 1) {
+    announceMediaChange(hookedVideo);
+  }
 }
 
 function joinRoom(roomId, action = 'join') {
@@ -840,44 +855,50 @@ function joinRoom(roomId, action = 'join') {
 
   socket.emit('join-room', { roomId, username: myUsername, action }, (response) => {
     joinRoomBtn.disabled = false;
+
     if (response.success) {
       showRoom(roomId);
       joinRoomInput.value = '';
       chrome.storage.local.set({ couch_room: roomId });
-    } else if (action === 'join') {
+      return;
+    }
+
+    if (action === 'join') {
       joinError.textContent = response.message;
     }
   });
 }
 
-// --- FEATURE 1: CREATING A ROOM ---
 function createRoom() {
   if (!usernameInput.value.trim()) return;
 
   captureAndSaveUsername();
   const newCode = generateRoomCode();
-  joinRoom(newCode, 'create');
   currentHost = myUsername;
-  const displayHostName = shadow.getElementById('display-host-name');
-  if (displayHostName) displayHostName.textContent = currentHost;
+
+  if (displayHostName) {
+    displayHostName.textContent = currentHost;
+  }
+
+  joinRoom(newCode, 'create');
 }
 
 createRoomForm.addEventListener('submit', (event) => {
   event.preventDefault();
+
   if (joinRoomInput.value.trim()) {
     joinRoomForm.requestSubmit();
     return;
   }
+
   createRoom();
 });
 
-// --- FEATURE 2: JOINING A ROOM ---
 joinRoomForm.addEventListener('submit', (event) => {
   event.preventDefault();
   if (joinRoomBtn.disabled) return;
 
   const code = joinRoomInput.value.trim();
-
   captureAndSaveUsername();
   joinRoom(code);
 });
@@ -890,15 +911,12 @@ leaveRoomBtn.addEventListener('click', () => {
 
   socket.emit('leave-room', { roomId: currentRoom, username: myUsername });
 
-  messageList.innerHTML = '';
-  compactMessages.innerHTML = '';
+  clearChatHistory();
   currentRoom = null;
   chrome.storage.local.remove('couch_room');
   updateLobbyButtons();
 
-  // Re-populate the input with the active username when returning to the lobby
   usernameInput.value = myUsername;
-
   chatContainer.style.display = 'none';
   lobbyView.style.display = 'flex';
   displayRoomId.textContent = '...';
@@ -923,33 +941,32 @@ function formatTimestamp(seconds) {
 // --- FEATURE: SHARE VIDEO TIMESTAMP ---
 timestampBtn.addEventListener('click', () => {
   const video = findVideoElement();
-
   const timeString = formatTimestamp(video?.currentTime || 0);
   const messageText = `⏱️ ${timeString}`;
 
-  appendMessage('You', messageText);
-  socket.emit('send-message', { roomId: currentRoom, username: myUsername, text: messageText });
+  emitLocalChatMessage(messageText);
 });
 
-// Grab the new copy button
 const copyCodeBtn = shadow.getElementById('copy-code-btn');
 
-// --- FEATURE: COPY ROOM CODE TO CLIPBOARD ---
 copyCodeBtn.addEventListener('click', () => {
   if (!currentRoom) return;
+
   navigator.clipboard.writeText(currentRoom).then(() => {
     copyCodeBtn.textContent = '✓';
-    setTimeout(() => { copyCodeBtn.textContent = '📋'; }, 2000);
+    setTimeout(() => {
+      copyCodeBtn.textContent = '📋';
+    }, 2000);
   });
 });
 
-chatForm.addEventListener('submit', (e) => {
-  e.preventDefault();
+chatForm.addEventListener('submit', (event) => {
+  event.preventDefault();
   const text = chatInput.value.trim();
+
   if (!text) return;
-  
-  appendMessage('You', text);
-  socket.emit('send-message', { roomId: currentRoom, username: myUsername, text: text });
+
+  emitLocalChatMessage(text);
   chatInput.value = '';
 });
 
@@ -960,31 +977,28 @@ socket.on('new-message', (data) => {
 socket.on('sync-room', (state) => {
   currentHost = state.host;
   pendingVideoState = state.video || null;
+
   const video = findVideoElement();
   if (video && pendingVideoState) {
     applyVideoState(video, pendingVideoState);
     pendingVideoState = null;
   }
 
-  const displayHostName = shadow.getElementById('display-host-name');
-  if (displayHostName) displayHostName.textContent = currentHost;
-  
-  // Render existing chat history...
-  messageList.innerHTML = '';
-  compactMessages.innerHTML = '';
-  state.chatHistory.forEach(msg => appendMessage(msg.sender, msg.text));
+  if (displayHostName) {
+    displayHostName.textContent = currentHost;
+  }
+
+  clearChatHistory();
+  state.chatHistory.forEach((msg) => appendMessage(msg.sender, msg.text));
 });
 
 socket.on('update-host', ({ newHost }) => {
   currentHost = newHost;
-  const displayHostName = shadow.getElementById('display-host-name');
+
   if (displayHostName) {
     displayHostName.textContent = newHost;
     console.log(`Host title transferred to: ${newHost}`);
   }
-
-  // Re-render chat messages so the new host gets the (host) tag on their past messages too!
-  // (Assuming you store chat messages or fetch them from room state. If using sync-room, it will refresh automatically)
 });
 
 sessionReady.then((savedRoom) => {
