@@ -452,6 +452,11 @@ shadow.innerHTML = `
       font-size: 0.6rem;
       opacity: 0.5;
     }
+    .message-row a {
+      color: inherit;
+      text-decoration: underline;
+      word-break: break-all;
+    }
     .emoji-btn {
       background: none;
       border: none;
@@ -747,6 +752,52 @@ const messageList = shadow.getElementById('messages');
 const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
 
+function buildLinkifiedText(messageText) {
+  const safeText = String(messageText ?? '');
+  if (!safeText) return document.createTextNode('');
+
+  const fragment = document.createDocumentFragment();
+  const parts = safeText.split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi);
+
+  parts.forEach((part) => {
+    if (!part) return;
+
+    const isUrl = /^https?:\/\/[^\s]+$/i.test(part) || /^www\.[^\s]+$/i.test(part);
+    if (!isUrl) {
+      fragment.appendChild(document.createTextNode(part));
+      return;
+    }
+
+    const link = document.createElement('a');
+    const normalizedUrl = /^www\./i.test(part) ? `https://${part}` : part;
+    link.href = normalizedUrl;
+    link.target = '_self';
+    link.rel = 'noopener noreferrer';
+    link.textContent = part;
+    fragment.appendChild(link);
+  });
+
+  return fragment;
+}
+
+function createSenderLabel(sender, isHost) {
+  const wrapper = document.createElement('span');
+  const name = document.createElement('b');
+  name.textContent = sender;
+  wrapper.appendChild(name);
+
+  if (isHost) {
+    const hostTag = document.createElement('b');
+    const hostText = document.createElement('i');
+    hostText.textContent = ' (host)';
+    hostTag.appendChild(hostText);
+    wrapper.appendChild(document.createTextNode(' '));
+    wrapper.appendChild(hostTag);
+  }
+
+  return wrapper;
+}
+
 function appendMessage(sender, text) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
@@ -760,12 +811,16 @@ function appendMessage(sender, text) {
     rowDiv.textContent = text;
   } else if (sender === 'You' || sender === myUsername) {
     rowDiv.classList.add('right');
-    rowDiv.textContent = text;
+    rowDiv.appendChild(buildLinkifiedText(text));
   } else {
     rowDiv.classList.add('left');
     const isHost = sender === currentHost;
-    const senderLabel = isHost ? `<b>${sender}</b> <b><i>(host)</i></b>` : `<b>${sender}</b>`;
-    rowDiv.innerHTML = `${senderLabel}: ${text}`;
+    const senderLabel = createSenderLabel(sender, isHost);
+    const labelSeparator = document.createTextNode(': ');
+
+    rowDiv.appendChild(senderLabel);
+    rowDiv.appendChild(labelSeparator);
+    rowDiv.appendChild(buildLinkifiedText(text));
   }
 
   messageList.appendChild(rowDiv);
