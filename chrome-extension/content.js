@@ -202,22 +202,58 @@ shadow.innerHTML = `
     }
 
     section {
+      transition: opacity 1s ease;
+      transition: background 1s ease;
       box-sizing: border-box;
       width: 100%;
-      opacity: 0.2;
+      opacity: 1;
       background-color: rgb(255 255 255 / 10%);
       backdrop-filter: blur(20px);
       border-radius: 12px;
+    }
+
+    section.blurred,
+    #edge-tab.blurred {
+      opacity: 0.2;
+    }
+
+    #edge-tab {
+      transition: opacity 1s ease;
+      transition: background 1s ease;
+      display: none;
+      position: absolute;
+      top: 50%;
+      width: 28px;
+      height: 56px;
+      padding: 0;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: white;
+      border: 1px solid rgb(255 255 255 / 20%);
+      background-color: rgb(255 255 255 / 10%);
+      font-size: 18px;
+      cursor: pointer;
+      opacity: 1;
+    }
+
+    #edge-tab:hover {
+      opacity: 1;
+    }
+
+    #edge-tab.has-new-message {
+      opacity: 1;
+      background-color: rgb(233 151 7 / 50%);
+    }
+
+    section.has-new-message {
+      opacity: 1;
+      background-color: rgb(233 151 7 / 50%);
     }
 
     :host(:hover) section,
     :host(:focus-within) section,
     :host(.is-focused) section,
     :host(:active) section {
-      opacity: 1;
-    }
-
-    section.has-new-message {
       opacity: 1;
     }
 
@@ -287,32 +323,19 @@ shadow.innerHTML = `
       line-height: 1;
     }
 
-    #edge-tab {
-      display: none;
-      position: absolute;
-      top: 50%;
-      width: 28px;
-      height: 56px;
-      padding: 0;
-      transform: translateY(-50%);
-      cursor: pointer;
-      color: white;
-      border: 1px solid rgb(255 255 255 / 20%);
-      background-color: rgb(255 255 255 / 10%);
-      font-size: 18px;
-    }
-
     :host(.docked-left) #edge-tab,
     :host(.docked-right) #edge-tab {
       display: block;
     }
 
     :host(.docked-left) #edge-tab {
+      top: 20px;
       right: -40px;
       border-radius: 0 8px 8px 0;
     }
 
     :host(.docked-right) #edge-tab {
+      top: 20px;
       left: -40px;
       border-radius: 8px 0 0 8px;
     }
@@ -345,6 +368,7 @@ shadow.innerHTML = `
       gap: 3px;
       max-height: 34px;
       overflow: hidden;
+      cursor: pointer;
     }
 
     .compact-title {
@@ -428,6 +452,9 @@ shadow.innerHTML = `
       padding: 2px;
       border-radius: 4px;
     }
+    .muted {
+      opacity: .5;
+    }
   </style>
   <section>
     <header id="drag-handle">
@@ -438,13 +465,17 @@ shadow.innerHTML = `
     <!-- LOBBY VIEW -->
     <div id="lobby">
       <!-- UPDATED: Username section without a separate button -->
-      <input type="text" id="username-input" placeholder="Username" autocomplete="off" style="margin-bottom: .5rem;"/>
-      <button id="create-room-btn" class="btn">Create New Room</button>
+      <form id="create-room-form" style="display: contents;">
+        <input type="text" id="username-input" placeholder="Username" autocomplete="off" style="margin-bottom: .5rem;"/>
+        <button type="submit" id="create-room-btn" class="btn">Create New Room</button>
+      </form>
 
-      <div style="display: flex; gap: 6px;">
+      <hr width="100%" border="1" class="muted">
+
+      <form id="join-room-form" style="display: flex; gap: 6px;">
         <input type="text" id="join-room-input" placeholder="Room Code" autocomplete="off"/>
-        <button id="join-room-btn" class="btn">Join</button>
-      </div>
+        <button type="submit" id="join-room-btn" class="btn">Join</button>
+      </form>
       <div id="join-error" style="color: red; font-size: 12px; height: 14px;"></div>
     </div>
 
@@ -508,21 +539,59 @@ const viewToggleBtn = shadow.getElementById('view-toggle-btn');
 const couchSection = shadow.querySelector('section');
 const edgeTab = shadow.getElementById('edge-tab');
 let newMessageOpacityTimer;
+let blurOpacityTimer;
 let dockedEdge = null;
 
-shadow.addEventListener('focus', () => hostContainer.classList.add('is-focused'), true);
+function clearBlurOpacityTimer() {
+  clearTimeout(blurOpacityTimer);
+  blurOpacityTimer = null;
+}
+
+function showInteractiveOpacity() {
+  clearBlurOpacityTimer();
+  couchSection.classList.remove('blurred');
+  edgeTab.classList.remove('blurred');
+}
+
+function scheduleBlurOpacity() {
+  clearBlurOpacityTimer();
+  blurOpacityTimer = setTimeout(() => {
+    if (!hostContainer.matches(':hover') && !shadow.activeElement) {
+      couchSection.classList.add('blurred');
+      edgeTab.classList.add('blurred');
+    }
+  }, 3000);
+}
+
+hostContainer.addEventListener('mouseenter', showInteractiveOpacity);
+hostContainer.addEventListener('mouseleave', scheduleBlurOpacity);
+shadow.addEventListener('focus', () => {
+  hostContainer.classList.add('is-focused');
+  showInteractiveOpacity();
+}, true);
 shadow.addEventListener('blur', () => {
   setTimeout(() => {
-    if (!shadow.activeElement) hostContainer.classList.remove('is-focused');
+    if (!shadow.activeElement) {
+      hostContainer.classList.remove('is-focused');
+      scheduleBlurOpacity();
+    }
   }, 0);
 }, true);
 
+scheduleBlurOpacity();
+
 function highlightNewMessage() {
+  showInteractiveOpacity();
   couchSection.classList.add('has-new-message');
+  edgeTab.classList.add('has-new-message');
   clearTimeout(newMessageOpacityTimer);
   newMessageOpacityTimer = setTimeout(() => {
     couchSection.classList.remove('has-new-message');
-  }, 2000);
+    edgeTab.classList.remove('has-new-message');
+    if (!hostContainer.matches(':hover') && !shadow.activeElement) {
+      scheduleBlurOpacity();
+    }
+  }, 5000);
 }
 
 function updateViewToggleButton() {
@@ -539,6 +608,9 @@ function showFullView() {
   compactView.style.display = 'none';
   lobbyView.style.display = currentRoom ? 'none' : 'flex';
   chatContainer.style.display = currentRoom ? 'flex' : 'none';
+  if (currentRoom) {
+    requestAnimationFrame(() => chatInput.focus());
+  }
 }
 
 function showCompactView() {
@@ -589,6 +661,9 @@ function setDockedEdge(edge) {
 function restoreFromEdge() {
   if (!dockedEdge) return;
   setDockedEdge(null);
+  if (currentRoom && !isCompactView) {
+    requestAnimationFrame(() => chatInput.focus());
+  }
 }
 
 edgeTab.addEventListener('mousedown', (e) => {
@@ -708,12 +783,14 @@ function appendMessage(sender, text) {
 
 const lobbyView = shadow.getElementById('lobby');
 const chatContainer = shadow.getElementById('chat-container');
-const createRoomBtn = shadow.getElementById('create-room-btn');
 const displayRoomId = shadow.getElementById('display-room-id');
 const joinRoomInput = shadow.getElementById('join-room-input');
 const joinRoomBtn = shadow.getElementById('join-room-btn');
+const joinRoomForm = shadow.getElementById('join-room-form');
 const joinError = shadow.getElementById('join-error');
 const usernameInput = shadow.getElementById('username-input');
+const createRoomBtn = shadow.getElementById('create-room-btn');
+const createRoomForm = shadow.getElementById('create-room-form');
 const displayHostName = shadow.getElementById('display-host-name');
 
 function updateLobbyButtons() {
@@ -774,8 +851,8 @@ function joinRoom(roomId, action = 'join') {
 }
 
 // --- FEATURE 1: CREATING A ROOM ---
-createRoomBtn.addEventListener('click', () => {
-  if (createRoomBtn.disabled) return;
+function createRoom() {
+  if (!usernameInput.value.trim()) return;
 
   captureAndSaveUsername();
   const newCode = generateRoomCode();
@@ -783,10 +860,20 @@ createRoomBtn.addEventListener('click', () => {
   currentHost = myUsername;
   const displayHostName = shadow.getElementById('display-host-name');
   if (displayHostName) displayHostName.textContent = currentHost;
+}
+
+createRoomForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (joinRoomInput.value.trim()) {
+    joinRoomForm.requestSubmit();
+    return;
+  }
+  createRoom();
 });
 
 // --- FEATURE 2: JOINING A ROOM ---
-joinRoomBtn.addEventListener('click', () => {
+joinRoomForm.addEventListener('submit', (event) => {
+  event.preventDefault();
   if (joinRoomBtn.disabled) return;
 
   const code = joinRoomInput.value.trim();
