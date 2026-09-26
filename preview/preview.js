@@ -33,6 +33,7 @@ window.chrome = {
     }
   },
   runtime: {
+    getURL: (path) => `/chrome-extension/${path}`,
     onMessage: {
       addListener: (listener) => runtimeListeners.push(listener)
     }

@@ -301,12 +301,12 @@ shadow.innerHTML = `
     }
 
     .btn.danger {
-      background-color: black;
+      background-color: #ed1212;
     }
 
     .btn.small {
       font-size: 0.6rem;
-      padding: .2rem;
+      padding: .2rem .4rem;
     }
 
     header { 
@@ -453,6 +453,10 @@ shadow.innerHTML = `
       font-size: 0.6rem;
       opacity: 0.5;
     }
+    .message-content.emoji-only {
+      font-size: 2rem;
+      line-height: 1.2;
+    }
     .message-row a {
       color: inherit;
       text-decoration: underline;
@@ -462,12 +466,21 @@ shadow.innerHTML = `
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 1.5rem;
+      font-size: 1rem;
       padding: 2px;
       border-radius: 4px;
     }
     .muted {
       opacity: .5;
+    }
+    #emoji-bar {
+      display: flex;
+      gap: 6px;
+      max-width: 190px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      white-space: nowrap;
     }
   </style>
   <section>
@@ -507,12 +520,24 @@ shadow.innerHTML = `
       <footer>
         <!-- Toolbar containing Emojis and Timestamp Button -->
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem .5rem;">
-          <div id="emoji-bar" style="display: flex; gap: 6px;">
-            <button class="emoji-btn" title="Laugh">😆</button>
-            <button class="emoji-btn" title="Heart">♥️</button>
-            <button class="emoji-btn" title="Splash">💦</button>
-            <button class="emoji-btn" title="Surprise">😲</button>
+          <div id="emoji-bar">
             <button class="emoji-btn" title="Clap">👏</button>
+            <button class="emoji-btn" title="Laugh">😂</button>
+            <button class="emoji-btn" title="Heart">♥️</button>
+            <button class="emoji-btn" title="Scared">😱</button>
+            <button class="emoji-btn" title="Surprise">😲</button>
+            <button class="emoji-btn" title="Sad">😢</button>
+            <button class="emoji-btn" title="Goodbye">👋</button>
+            <button class="emoji-btn" title="Splash">💦</button>
+            <button class="emoji-btn" title="Paper">🧻</button>
+            <button class="emoji-btn" title="Thumbs Up">👍</button>
+            <button class="emoji-btn" title="Fire">🔥</button>
+            <button class="emoji-btn" title="Happy">😄</button>
+            <button class="emoji-btn" title="Cool">😎</button>
+            <button class="emoji-btn" title="Party">🥳</button>
+            <button class="emoji-btn" title="Perfect">💯</button>
+            <button class="emoji-btn" title="Sparkles">✨</button>
+            <button class="emoji-btn" title="Handshake">🤝</button>
           </div>
           
           <!-- NEW: Timestamp Button -->
@@ -822,9 +847,27 @@ function createSenderLabel(sender, isHost) {
   return wrapper;
 }
 
+const emojiSegmenter = typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  : null;
+
+function isSingleEmoji(text) {
+  const trimmedText = String(text ?? '').trim();
+  if (!trimmedText || !emojiSegmenter) return false;
+
+  const segments = [...emojiSegmenter.segment(trimmedText)];
+  if (segments.length !== 1) return false;
+
+  return /(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3)/u.test(segments[0].segment);
+}
+
 function appendMessage(sender, text) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
+
+  const messageContent = document.createElement('span');
+  messageContent.className = 'message-content';
+  if (isSingleEmoji(text)) messageContent.classList.add('emoji-only');
 
   const compactRow = document.createElement('div');
   compactRow.className = 'compact-message';
@@ -832,10 +875,12 @@ function appendMessage(sender, text) {
 
   if (sender === 'System') {
     rowDiv.classList.add('system');
-    rowDiv.textContent = text;
+    messageContent.textContent = text;
+    rowDiv.appendChild(messageContent);
   } else if (sender === 'You' || sender === myUsername) {
     rowDiv.classList.add('right');
-    rowDiv.appendChild(buildLinkifiedText(text));
+    messageContent.appendChild(buildLinkifiedText(text));
+    rowDiv.appendChild(messageContent);
   } else {
     rowDiv.classList.add('left');
     const isHost = sender === currentHost;
@@ -844,7 +889,8 @@ function appendMessage(sender, text) {
 
     rowDiv.appendChild(senderLabel);
     rowDiv.appendChild(labelSeparator);
-    rowDiv.appendChild(buildLinkifiedText(text));
+    messageContent.appendChild(buildLinkifiedText(text));
+    rowDiv.appendChild(messageContent);
   }
 
   messageList.appendChild(rowDiv);
