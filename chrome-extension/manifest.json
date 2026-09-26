@@ -4,39 +4,26 @@
   "version": "1.1",
   "description": "Real-time synchronized video playback and chat.",
   "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": [
-    "https://www.youtube.com/*",
-    "https://youtube.com/*",
-    "https://cinejoy.pk/*",
-    "https://*.cinejoy.pk/*"
-  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_title": "Show or hide Couch"
+    "default_title": "Show or hide Couch",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
+  "web_accessible_resources": [
     {
-      "matches": [
-        "https://www.youtube.com/*",
-        "https://youtube.com/*",
-        "https://cinejoy.pk/*",
-        "https://*.cinejoy.pk/*"
-      ],
-      "js": ["keyboard-guard.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*",
-        "https://youtube.com/*",
-        "https://cinejoy.pk/*",
-        "https://*.cinejoy.pk/*"
-      ],
-      "js": ["socket.io.js", "content.js"],
-      "run_at": "document_end"
+      "resources": ["icons/icon128.png"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

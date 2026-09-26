@@ -193,6 +193,7 @@ hostContainer.style.cssText = `
   z-index: 9999999;
 `;
 
+const logoUrl = chrome.runtime.getURL('icons/icon128.png');
 const shadow = hostContainer.attachShadow({ mode: 'open' });
 shadow.innerHTML = `
   <style>
@@ -291,7 +292,7 @@ shadow.innerHTML = `
       color: white; 
       border: none; 
       border-radius: 4px; 
-      background-color: black;
+      background-color: rgb(199, 114, 75);
     }
 
     .btn:disabled {
@@ -300,7 +301,7 @@ shadow.innerHTML = `
     }
 
     .btn.danger {
-      background-color: #ef4444;
+      background-color: black;
     }
 
     .btn.small {
@@ -316,8 +317,8 @@ shadow.innerHTML = `
       align-items: center;
       justify-content: space-between;
       border-radius: 12px 12px 0 0;
-      padding: 0 .5rem;
-      background-color: rgb(255 255 255 / 10%);
+      padding: .5rem 1rem;
+      background-color: rgb(255 255 255 / 30%);
     }
     header:active { cursor: all-scroll; }
 
@@ -471,7 +472,7 @@ shadow.innerHTML = `
   </style>
   <section>
     <header id="drag-handle">
-      <span style="font-size: 1.5rem;">🛋</span>
+      <img src="${logoUrl}" alt="Couch" width="16" height="16">
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
     
@@ -630,6 +631,16 @@ function showCompactView() {
   lobbyView.style.display = 'none';
   compactView.style.display = 'flex';
 }
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'toggle-chat') {
+    if (hostContainer.style.display === 'none') {
+      showCompactView();
+    } else {
+      hostContainer.style.display = 'none';
+    }
+  }
+});
 
 // 4. Drag Logic
 const dragHandle = shadow.getElementById('drag-handle');
