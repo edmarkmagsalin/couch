@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import {
+  copyFileSync,
   cpSync,
   mkdirSync,
   readFileSync,
@@ -13,6 +14,8 @@ const tempDirectory = '.package-tmp';
 const extensionDirectory = join(tempDirectory, 'couch-chrome-extension');
 const distributionDirectory = 'dist';
 const archivePath = join(distributionDirectory, 'couch-chrome-extension.zip');
+const sharedFolderPath = '/Users/edmarkmagsalin/Library/CloudStorage/GoogleDrive-edmarkmagsalin@gmail.com/My Drive/Shared/Couch';
+const sharedArchivePath = join(sharedFolderPath, 'couch-chrome-extension.zip');
 
 if (!serverUrl) {
   throw new Error('COUCH_SERVER_URL must be set');
@@ -35,6 +38,10 @@ try {
     ['-r', join(process.cwd(), archivePath), 'couch-chrome-extension'],
     { cwd: tempDirectory, stdio: 'inherit' },
   );
+
+  mkdirSync(sharedFolderPath, { recursive: true });
+  copyFileSync(archivePath, sharedArchivePath);
+  console.log(`Copied package to ${sharedArchivePath}`);
 } finally {
   rmSync(tempDirectory, { recursive: true, force: true });
 }
