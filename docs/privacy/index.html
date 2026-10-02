@@ -7,59 +7,179 @@
     <title>Couch Privacy Policy</title>
     <style>
       :root {
-        color-scheme: light;
-        font-family: system-ui, sans-serif;
-        line-height: 1.6;
-        color: #202522;
-        background: #f5f7f4;
+        color-scheme: dark;
+        --bg: #090909;
+        --bg-elevated: #121416;
+        --panel: rgba(18, 20, 22, 0.9);
+        --panel-strong: rgba(26, 28, 31, 0.95);
+        --surface: rgba(255, 255, 255, 0.03);
+        --line: rgba(255, 255, 255, 0.1);
+        --text: #f3f4f5;
+        --muted: #b9bfc5;
+        --accent: #e50914;
+        --accent-soft: rgba(229, 9, 20, 0.14);
+        --shadow: rgba(0, 0, 0, 0.45);
+        font-family: Inter, "Segoe UI", sans-serif;
+        line-height: 1.7;
+        color: var(--text);
+        background: var(--bg);
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
-        max-width: 760px;
+        margin: 0;
+        min-height: 100vh;
+        padding: 48px 20px 80px;
+        background:
+          radial-gradient(circle at top, rgba(229, 9, 20, 0.12), transparent 38%),
+          linear-gradient(180deg, #090909 0%, #111315 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 860px;
         margin: 0 auto;
-        padding: 48px 24px 72px;
+        padding: 40px 28px 32px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 24px 60px var(--shadow);
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+      }
+
+      main::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 4px;
+        background: linear-gradient(90deg, var(--accent), rgba(229, 9, 20, 0.25));
       }
 
       h1, h2 {
         line-height: 1.2;
+        letter-spacing: -0.03em;
       }
 
       h1 {
-        margin-bottom: 8px;
-        font-size: 2.25rem;
+        margin: 0 0 10px;
+        font-size: clamp(2.2rem, 4vw, 3.1rem);
+        font-weight: 800;
       }
 
       h2 {
-        margin-top: 36px;
-        font-size: 1.25rem;
+        margin-top: 38px;
+        margin-bottom: 12px;
+        font-size: 1.35rem;
+        color: #ffffff;
       }
 
       p, li {
         max-width: 70ch;
+        color: var(--muted);
+      }
+
+      ul {
+        padding-left: 20px;
+      }
+
+      li + li {
+        margin-top: 12px;
+      }
+
+      strong {
+        color: var(--text);
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #ffb4b9;
+        border: 1px solid rgba(255, 255, 255, 0.08);
       }
 
       a {
-        color: #155f52;
+        color: #ff5a61;
+        text-decoration-thickness: 1.5px;
+        text-underline-offset: 0.2em;
+      }
+
+      a:hover,
+      a:focus {
+        color: #ff868d;
       }
 
       .updated {
-        margin-top: 0;
-        color: #58635d;
+        margin: 0 0 22px;
+        color: #d4d9dd;
+        font-size: 0.96rem;
+        opacity: 0.9;
       }
 
       .contact-note {
-        padding: 16px;
-        border-left: 4px solid #b65d35;
-        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 14px;
+        padding: 18px 18px 18px 20px;
+        border-left: 4px solid var(--accent);
+        background: linear-gradient(180deg, rgba(229, 9, 20, 0.08), rgba(255, 255, 255, 0.02));
+        border-radius: 12px;
+        border: 1px solid rgba(229, 9, 20, 0.28);
+      }
+
+      .contact-label {
+        font-size: 0.68rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #ffb7bd;
+      }
+
+      .contact-note a {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 600;
+        transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+      }
+
+      .contact-note a::after {
+        content: "↗";
+        font-size: 0.9em;
+        opacity: 0.8;
+      }
+
+      .contact-note a:hover,
+      .contact-note a:focus {
+        background: rgba(229, 9, 20, 0.08);
+        border-color: rgba(229, 9, 20, 0.35);
+        transform: translateY(-1px);
       }
 
       @media (max-width: 520px) {
         body {
-          padding: 32px 18px 56px;
+          padding: 28px 14px 48px;
+        }
+
+        main {
+          padding: 28px 18px 24px;
+          border-radius: 18px;
         }
 
         h1 {
-          font-size: 1.9rem;
+          font-size: 2rem;
         }
       }
     </style>
@@ -152,9 +272,10 @@
       </p>
 
       <h2>Contact</h2>
-      <p class="contact-note">
+      <div class="contact-note">
+        <span class="contact-label">Portfolio &amp; contact</span>
         <a href="https://edmarkmagsalin.onrender.com/">Edmark’s portfolio and contact information</a>
-      </p>
+      </div>
     </main>
   </body>
 </html>
