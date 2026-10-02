@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Privacy policy for the Couch Chrome extension.">
+    <title>Couch Privacy Policy</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+        line-height: 1.6;
+        color: #202522;
+        background: #f5f7f4;
+      }
+
+      body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+      }
+
+      h1, h2 {
+        line-height: 1.2;
+      }
+
+      h1 {
+        margin-bottom: 8px;
+        font-size: 2.25rem;
+      }
+
+      h2 {
+        margin-top: 36px;
+        font-size: 1.25rem;
+      }
+
+      p, li {
+        max-width: 70ch;
+      }
+
+      a {
+        color: #155f52;
+      }
+
+      .updated {
+        margin-top: 0;
+        color: #58635d;
+      }
+
+      .contact-note {
+        padding: 16px;
+        border-left: 4px solid #b65d35;
+        background: #fff;
+      }
+
+      @media (max-width: 520px) {
+        body {
+          padding: 32px 18px 56px;
+        }
+
+        h1 {
+          font-size: 1.9rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Couch Privacy Policy</h1>
+      <p class="updated">Last updated: October 2, 2026</p>
+
+      <p>
+        This policy describes how the Couch Chrome extension handles information
+        when you use it to synchronize video playback and chat with other people.
+      </p>
+
+      <h2>Information Couch handles</h2>
+      <ul>
+        <li>
+          <strong>Username and room code:</strong> The username you choose and the
+          room code you create or join are sent to the Couch server to identify
+          participants and coordinate a room. The extension saves your username
+          and current room code in Chrome's local extension storage. When loading
+          an existing username, it may also read the <code>couch_username</code>
+          key from the current website's local storage as a legacy fallback.
+        </li>
+        <li>
+          <strong>Chat:</strong> Messages you send, your username, the room code,
+          and message timestamps are sent to the Couch server and delivered to
+          participants in that room.
+        </li>
+        <li>
+          <strong>Playback and media details:</strong> The extension sends play,
+          pause, and seek actions, playback positions, the detected video title,
+          and the video's source URL to the server for synchronization. The title
+          is shared with participants in the room. The source URL is sent to the
+          server but is not displayed to other participants by Couch.
+        </li>
+        <li>
+          <strong>Connection information:</strong> The server creates a temporary
+          Socket.IO connection identifier. Render, our hosting provider, may
+          process network and connection information, such as an IP address, to
+          deliver and secure the service.
+        </li>
+      </ul>
+
+      <h2>How information is used and shared</h2>
+      <p>
+        Couch uses this information only to provide synchronized rooms, playback
+        updates, chat, and the operation and security of those features. Room
+        content is shared with participants connected to the same room. The Couch
+        server is hosted by Render, which processes information as needed to
+        provide hosting and related infrastructure services.
+      </p>
+
+      <h2>Storage and retention</h2>
+      <p>
+        The Couch server keeps room and chat state in memory while a room is
+        active. When the last participant leaves, the server schedules that room
+        state for deletion after 60 seconds; a participant reconnecting during
+        that period cancels the scheduled deletion. Couch does not write room
+        state to a persistent application database.
+      </p>
+      <p>
+        For diagnostics, the server also writes chat messages, usernames, and
+        room codes, and temporary socket identifiers to application logs. The
+        current Render Hobby workspace makes these logs available in Render's
+        log explorer for up to 7 days. No external log-stream destination is
+        configured for the workspace at the time of this policy. Render's
+        handling of infrastructure data is also subject to its own policies.
+      </p>
+      <p>
+        Your username remains in Chrome's local extension storage until you
+        change it or clear the extension's stored data. The saved room code is
+        removed when you leave a room.
+      </p>
+
+      <h2>Security</h2>
+      <p>
+        The extension communicates with the Couch server over HTTPS and secure
+        WebSockets. Chat messages are processed by the server and included in its
+        application logs, so chat is not end-to-end encrypted. The server
+        operator and hosting provider may access data as needed to operate the
+        service.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If Couch's data practices change, this policy will be updated to describe
+        those changes. The updated date above indicates when the policy was most
+        recently revised.
+      </p>
+
+      <h2>Contact</h2>
+      <p class="contact-note">
+        <a href="https://edmarkmagsalin.onrender.com/">Edmark’s portfolio and contact information</a>
+      </p>
+    </main>
+  </body>
+</html>

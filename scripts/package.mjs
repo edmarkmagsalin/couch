@@ -3,6 +3,7 @@ import {
   copyFileSync,
   cpSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -34,8 +35,8 @@ try {
 
   execFileSync(
     'zip',
-    ['-r', join(process.cwd(), archivePath), 'couch-chrome-extension'],
-    { cwd: tempDirectory, stdio: 'inherit' },
+    ['-r', join(process.cwd(), archivePath), ...readdirSync(extensionDirectory)],
+    { cwd: extensionDirectory, stdio: 'inherit' },
   );
 
   if (packageDestination) {
