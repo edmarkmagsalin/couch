@@ -219,7 +219,7 @@ shadow.innerHTML = `
       background-color: rgb(255 255 255 / 10%);
       backdrop-filter: blur(20px);
       border-radius: 12px;
-      border: solid 1px #e50914;
+      border: solid 2px #e50914;
     }
 
     section.blurred,
@@ -292,8 +292,7 @@ shadow.innerHTML = `
     }
 
     input:focus {
-      border-color: #e50914;
-      box-shadow: 0 0 0 2px rgb(229 9 20 / 35%);
+      border-color: rgb(229 9 20 / 40%);
     }
 
     input::placeholder {
@@ -445,8 +444,8 @@ shadow.innerHTML = `
       font-size: 12px;
       
       /* Scroll & Height Settings */
-      height: 100px;
-      max-height: 100px;
+      height: 130px;
+      max-height: 130px;
       overflow-y: auto;
       
       /* Hide scrollbar for Chrome, Safari, Opera, and Firefox */
@@ -474,6 +473,26 @@ shadow.innerHTML = `
       align-self: flex-end;
       max-width: 80%;
       text-align: right;
+    }
+
+    .sender-label {
+      display: block;
+      margin: 0 0 2px 4px;
+      font-size: 8px;
+      line-height: 1;
+      opacity: 0.75;
+    }
+
+    .message-row:not(.system) .message-content:not(.emoji-only) {
+      display: inline-block;
+      padding: 5px 8px;
+      border-radius: 10px;
+      background: rgb(255 255 255 / 14%);
+      text-align: left;
+    }
+
+    .message-row.right:not(.system) .message-content:not(.emoji-only) {
+      background: #e50914;
     }
 
     .message-row.system {
@@ -828,15 +847,16 @@ document.addEventListener('mousemove', (e) => {
 });
 
 function snapToEdge() {
+  const viewportWidth = document.documentElement.clientWidth;
+
   if (dockedEdge) {
     hostContainer.style.left = dockedEdge === 'left'
       ? '12px'
-      : `${window.innerWidth - hostContainer.offsetWidth - 12}px`;
+      : `${viewportWidth - hostContainer.offsetWidth - 12}px`;
     return;
   }
 
   const rect = hostContainer.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   const edgeGap = 12;
   const atLeftEdge = rect.left <= edgeGap;
@@ -931,6 +951,7 @@ function buildLinkifiedText(messageText) {
 
 function createSenderLabel(sender, isHost) {
   const wrapper = document.createElement('span');
+  wrapper.className = 'sender-label';
   const name = document.createElement('b');
   name.textContent = sender;
   wrapper.appendChild(name);
@@ -985,10 +1006,8 @@ function appendMessage(sender, text) {
     rowDiv.classList.add('left');
     const isHost = sender === currentHost;
     const senderLabel = createSenderLabel(sender, isHost);
-    const labelSeparator = document.createTextNode(': ');
 
     rowDiv.appendChild(senderLabel);
-    rowDiv.appendChild(labelSeparator);
     messageContent.appendChild(buildLinkifiedText(text));
     rowDiv.appendChild(messageContent);
   }
