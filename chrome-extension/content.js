@@ -198,6 +198,7 @@ shadow.innerHTML = `
   <style>
     :host {
       display: block;
+      font-size: 12px;
       transition: transform 180ms ease;
     }
 
@@ -218,12 +219,13 @@ shadow.innerHTML = `
       background-color: rgb(255 255 255 / 10%);
       backdrop-filter: blur(20px);
       border-radius: 12px;
-      border: solid 1px rgb(199, 114, 75);
+      border: solid 1px #e50914;
     }
 
     section.blurred,
     #edge-tab.blurred {
-      opacity: 0.2;
+      opacity: 1;
+      // opacity: 0.2;
     }
 
     #edge-tab {
@@ -238,7 +240,7 @@ shadow.innerHTML = `
       transform: translateY(-50%);
       cursor: pointer;
       color: white;
-      border: 1px solid rgb(255 255 255 / 20%);
+      border: solid 1px #e50914;
       background-color: rgb(255 255 255 / 10%);
       font-size: 18px;
       cursor: pointer;
@@ -270,10 +272,16 @@ shadow.innerHTML = `
       color: rgb(255 255 255 / 75%);
       font-family: sans-serif; 
     }
+
+    button,
     input {
-      border-radius: .5rem;
-      height: 1rem;
-      padding: 0.5rem;
+      font: inherit;
+    }
+
+    input {
+      border-radius: 8px;
+      height: 16px;
+      padding: 8px;
       box-shadow: none;
       appearance: none;
       -webkit-appearance: none;
@@ -285,8 +293,8 @@ shadow.innerHTML = `
     }
 
     input:focus {
-      border-color: rgb(199, 114, 75);
-      box-shadow: 0 0 0 2px rgb(199 114 75 / 25%);
+      border-color: #e50914;
+      box-shadow: 0 0 0 2px rgb(229 9 20 / 35%);
     }
 
     input::placeholder {
@@ -294,12 +302,12 @@ shadow.innerHTML = `
     }
     
     .btn {
-      padding: .5rem;
+      padding: 8px;
       cursor: pointer;
       color: white; 
       border: none; 
       border-radius: 4px; 
-      background-color: rgb(199, 114, 75);
+      background-color: #e50914;
     }
 
     .btn:disabled {
@@ -307,13 +315,13 @@ shadow.innerHTML = `
       opacity: 0.45;
     }
 
-    .btn.danger {
-      background-color: #ed1212;
+    .btn.secondary {
+      background-color: black;
     }
 
     .btn.small {
-      font-size: 0.6rem;
-      padding: .2rem .4rem;
+      font-size: 9px;
+      padding: 3px 6px;
     }
 
     header { 
@@ -324,18 +332,19 @@ shadow.innerHTML = `
       align-items: center;
       justify-content: space-between;
       border-radius: 12px 12px 0 0;
-      padding: .5rem;
-      background-color: rgb(255 255 255 / 30%);
+      padding: 4px 8px;
+      background-color: rgb(255 255 255 / 10%);
       font-variant: small-caps;
     }
 
     .brand-label {
-      background: linear-gradient(90deg, rgb(199, 114, 75), rgb(255, 214, 176));
+      background: linear-gradient(90deg, #e50914, #e509147a);
       background-clip: text;
       -webkit-background-clip: text;
       color: transparent;
       -webkit-text-fill-color: transparent;
       font-weight: 700;
+      font-size: 20px;
     }
 
     header:active { cursor: all-scroll; }
@@ -385,7 +394,7 @@ shadow.innerHTML = `
       display: flex;
       flex-direction: column;
       gap: 4px;
-      padding: .5rem;
+      padding: 8px;
       cursor: default;
     }
 
@@ -398,9 +407,12 @@ shadow.innerHTML = `
       cursor: pointer;
     }
 
-    .compact-title {
-      font-size: 11px;
-      font-weight: bold;
+    #compact-messages:empty::before {
+      content: 'Welcome to Couch!';
+      font-size: 10px;
+      line-height: 15px;
+      opacity: 0.7;
+      text-align: center;
     }
 
     .compact-message {
@@ -412,7 +424,7 @@ shadow.innerHTML = `
     }
 
     .room-header { 
-      font-size: 12px; 
+      font-size: inherit; 
       padding: 4px 5px; 
       font-family: monospace; 
       display: flex; 
@@ -449,7 +461,7 @@ shadow.innerHTML = `
     /* Message Row Alignments (Plain Text) */
     .message-row {
       width: 100%;
-      font-size: 12px;
+      font-size: inherit;
       word-break: break-word;
     }
 
@@ -468,11 +480,11 @@ shadow.innerHTML = `
     .message-row.system {
       text-align: center;
       font-style: italic;
-      font-size: 0.6rem;
+      font-size: 9.6px;
       opacity: 0.5;
     }
     .message-content.emoji-only {
-      font-size: 2rem;
+      font-size: 32px;
       line-height: 1.2;
     }
     .message-row a {
@@ -481,12 +493,16 @@ shadow.innerHTML = `
       word-break: break-all;
     }
     .emoji-btn {
+      transition: transform 0.4s ease;
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 1rem;
+      font-size: 20px;
       padding: 2px;
       border-radius: 4px;
+    }
+    .emoji-btn:hover {
+      transform: scale(1.2)
     }
     .muted {
       opacity: .5;
@@ -500,6 +516,29 @@ shadow.innerHTML = `
       scrollbar-width: none;
       white-space: nowrap;
     }
+
+    .flex {
+      display: flex;
+      gap: 10px;
+    }
+
+    .flex-column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .copy-btn {
+      transition: transform 0.4s ease;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 10px;
+    }
+
+    .copy-btn:hover {
+      transform: scale(1.2);
+    }
   </style>
   <section>
     <header id="drag-handle">
@@ -510,34 +549,34 @@ shadow.innerHTML = `
     <!-- LOBBY VIEW -->
     <div id="lobby">
       <!-- UPDATED: Username section without a separate button -->
-      <form id="create-room-form" style="display: contents;">
-        <input type="text" id="username-input" placeholder="Username" autocomplete="off" style="margin-bottom: .5rem;"/>
+      <form id="create-room-form" class="flex-column">
+        <input type="text" id="username-input" placeholder="Username" autocomplete="off"/>
         <button type="submit" id="create-room-btn" class="btn">Create New Room</button>
       </form>
 
       <hr width="100%" border="1" class="muted">
 
-      <form id="join-room-form" style="display: flex; gap: 6px;">
+      <form id="join-room-form" class="flex">
         <input type="text" id="join-room-input" placeholder="Room Code" autocomplete="off"/>
         <button type="submit" id="join-room-btn" class="btn">Join</button>
       </form>
-      <div id="join-error" style="color: red; font-size: 12px; height: 14px;"></div>
+      <div id="join-error" style="text-align: center; font-size: 10px; height: 10px;"></div>
     </div>
 
     <!-- CHAT VIEW -->
     <div id="chat-container">
-      <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: 12px;">
+      <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: inherit;">
         <div style="display: flex; align-items: center;">
           <span><strong id="display-room-id">...</strong></span>
           <!-- NEW: Copy Room Code Button -->
-          <button id="copy-code-btn" style="background: none; border:none; cursor: pointer; font-size: 10px;" title="Copy Room Code">📋</button>
+          <button id="copy-code-btn" class="copy-btn" title="Copy Room Code">📋</button>
         </div>
-        <button id="leave-room-btn" class="btn small danger">Leave</button>
+        <button id="leave-room-btn" class="btn small secondary">Exit</button>
       </div>
       <main><ul id="messages"></ul></main>
       <footer>
         <!-- Toolbar containing Emojis and Timestamp Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem .5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3.2px 8px;">
           <div id="emoji-bar">
             <button class="emoji-btn" title="Clap">👏</button>
             <button class="emoji-btn" title="Laugh">😂</button>
@@ -563,7 +602,7 @@ shadow.innerHTML = `
         </div>
         
         
-        <div style="padding: 0 .5rem .5rem .5rem;">
+        <div style="padding: 0 8px 8px 8px;">
           <form id="chat-form" style="display: flex;">
             <input type="text" id="chat-input" placeholder="Type..." autocomplete="off" required />
           </form>
