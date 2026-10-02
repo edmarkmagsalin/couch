@@ -14,8 +14,7 @@ const tempDirectory = '.package-tmp';
 const extensionDirectory = join(tempDirectory, 'couch-chrome-extension');
 const distributionDirectory = 'dist';
 const archivePath = join(distributionDirectory, 'couch-chrome-extension.zip');
-const sharedFolderPath = '/Users/edmarkmagsalin/Library/CloudStorage/GoogleDrive-edmarkmagsalin@gmail.com/My Drive/Shared/Couch';
-const sharedArchivePath = join(sharedFolderPath, 'couch-chrome-extension.zip');
+const packageDestination = process.env.COUCH_PACKAGE_DESTINATION;
 
 if (!serverUrl) {
   throw new Error('COUCH_SERVER_URL must be set');
@@ -39,9 +38,12 @@ try {
     { cwd: tempDirectory, stdio: 'inherit' },
   );
 
-  mkdirSync(sharedFolderPath, { recursive: true });
-  copyFileSync(archivePath, sharedArchivePath);
-  console.log(`Copied package to ${sharedArchivePath}`);
+  if (packageDestination) {
+    mkdirSync(packageDestination, { recursive: true });
+    const destinationPath = join(packageDestination, 'couch-chrome-extension.zip');
+    copyFileSync(archivePath, destinationPath);
+    console.log(`Copied package to ${destinationPath}`);
+  }
 } finally {
   rmSync(tempDirectory, { recursive: true, force: true });
 }

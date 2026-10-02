@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+          run_install: false
+
+      - name: Check tag matches extension version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          manifest_version="$(jq -r '.version' chrome-extension/manifest.json)"
+          test "$RELEASE_TAG" = "v$manifest_version"
+
+      - name: Build extension package
+        run: pnpm package
+        env:
+          COUCH_SERVER_URL: ${{ secrets.COUCH_SERVER_URL }}
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/couch-chrome-extension.zip --verify-tag --generate-notes

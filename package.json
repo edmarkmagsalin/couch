@@ -6,7 +6,7 @@
   "scripts": {
     "backend": "node backend/server.js",
     "preview": "node -e \"import('node:http').then(({createServer}) => import('node:fs').then(({createReadStream}) => createServer((req, res) => { const path = req.url === '/' ? 'preview/preview.html' : req.url.slice(1); createReadStream(path).on('error', () => { res.writeHead(404); res.end(); }).on('open', () => res.writeHead(200)).pipe(res); }).listen(4173, () => console.log('Preview running at http://localhost:4173'))) )\"",
-    "package": "test -f .env && set -a && . ./.env && set +a && node scripts/package.mjs",
+    "package": "node --env-file-if-exists=.env scripts/package.mjs",
     "release": "node scripts/release.mjs && pnpm package",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -16,7 +16,7 @@
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "^11.15.1",
+      "version": "11.15.1",
       "onFail": "download"
     }
   },
