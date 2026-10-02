@@ -224,8 +224,7 @@ shadow.innerHTML = `
 
     section.blurred,
     #edge-tab.blurred {
-      opacity: 1;
-      // opacity: 0.2;
+      opacity: 0.2;
     }
 
     #edge-tab {
