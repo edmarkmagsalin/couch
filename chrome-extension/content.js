@@ -193,7 +193,6 @@ hostContainer.style.cssText = `
   z-index: 9999999;
 `;
 
-const logoUrl = chrome.runtime.getURL('icons/icon128.png');
 const shadow = hostContainer.attachShadow({ mode: 'open' });
 shadow.innerHTML = `
   <style>
@@ -219,6 +218,7 @@ shadow.innerHTML = `
       background-color: rgb(255 255 255 / 10%);
       backdrop-filter: blur(20px);
       border-radius: 12px;
+      border: solid 1px rgb(199, 114, 75);
     }
 
     section.blurred,
@@ -281,7 +281,14 @@ shadow.innerHTML = `
       border: 1px solid rgb(255 255 255 / 20%);
       background-color: rgb(255 255 255 / 10%);
       flex-grow: 1;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
     }
+
+    input:focus {
+      border-color: rgb(199, 114, 75);
+      box-shadow: 0 0 0 2px rgb(199 114 75 / 25%);
+    }
+
     input::placeholder {
       color: rgb(255 255 255 / 30%);
     }
@@ -317,9 +324,20 @@ shadow.innerHTML = `
       align-items: center;
       justify-content: space-between;
       border-radius: 12px 12px 0 0;
-      padding: .5rem 1rem;
+      padding: .5rem;
       background-color: rgb(255 255 255 / 30%);
+      font-variant: small-caps;
     }
+
+    .brand-label {
+      background: linear-gradient(90deg, rgb(199, 114, 75), rgb(255, 214, 176));
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+    }
+
     header:active { cursor: all-scroll; }
 
     .view-toggle-btn {
@@ -485,7 +503,7 @@ shadow.innerHTML = `
   </style>
   <section>
     <header id="drag-handle">
-      <img src="${logoUrl}" alt="Couch" width="16" height="16">
+      <span class="brand-label">couch</span>
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
     

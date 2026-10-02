@@ -8,8 +8,30 @@
     :root {
       color-scheme: dark;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      background: #111827;
-      color: #e5e7eb;
+      --page-background: #111827;
+      --page-text: #e5e7eb;
+      --muted-text: #9ca3af;
+      --button-border: #4b5563;
+      --button-text: #f9fafb;
+      --button-background: #374151;
+      --button-hover: #4b5563;
+      --player-border: #374151;
+      --status-color: #93c5fd;
+      background: var(--page-background);
+      color: var(--page-text);
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --page-background: #f3f4f6;
+      --page-text: #1f2937;
+      --muted-text: #6b7280;
+      --button-border: #9ca3af;
+      --button-text: #1f2937;
+      --button-background: #e5e7eb;
+      --button-hover: #d1d5db;
+      --player-border: #9ca3af;
+      --status-color: #1d4ed8;
     }
 
     body {
@@ -25,7 +47,7 @@
     }
 
     h1 { margin: 0 0 8px; font-size: 28px; }
-    p { color: #9ca3af; }
+    p { color: var(--muted-text); }
 
     .controls {
       display: flex;
@@ -35,22 +57,22 @@
     }
 
     button {
-      border: 1px solid #4b5563;
+      border: 1px solid var(--button-border);
       border-radius: 6px;
       padding: 8px 12px;
-      color: #f9fafb;
-      background: #374151;
+      color: var(--button-text);
+      background: var(--button-background);
       cursor: pointer;
     }
 
-    button:hover { background: #4b5563; }
+    button:hover { background: var(--button-hover); }
 
     .fake-player {
       position: relative;
       display: grid;
       place-items: center;
       min-height: 360px;
-      border: 1px solid #374151;
+      border: 1px solid var(--player-border);
       border-radius: 8px;
       background: #030712;
       overflow: hidden;
@@ -73,7 +95,7 @@
 
     #status {
       margin-top: 16px;
-      color: #93c5fd;
+      color: var(--status-color);
       font-family: ui-monospace, monospace;
       font-size: 13px;
     }
@@ -85,6 +107,7 @@
     <p>Use the controls to reveal the real extension UI and simulate room events.</p>
 
     <div class="controls">
+      <button id="theme-toggle" type="button">Switch to light mode</button>
       <button id="simulate-message">Simulate message</button>
       <button id="simulate-remote-seek">Simulate remote seek</button>
       <button id="simulate-remote-play">Simulate remote play</button>

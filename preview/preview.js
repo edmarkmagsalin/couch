@@ -104,6 +104,13 @@ function shadowRoot() {
   return document.getElementById('couch')?.shadowRoot;
 }
 
+const themeToggle = document.getElementById('theme-toggle');
+themeToggle.addEventListener('click', () => {
+  const isLight = document.documentElement.dataset.theme !== 'light';
+  document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
+  themeToggle.textContent = isLight ? 'Switch to dark mode' : 'Switch to light mode';
+});
+
 document.getElementById('simulate-message').addEventListener('click', () => {
   dispatchSocketEvent('new-message', {
     sender: 'Preview Friend',
