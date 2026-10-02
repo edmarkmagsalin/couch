@@ -11,6 +11,33 @@
         padding: 48px 20px 80px;
       }
 
+      .top-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 18px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 600;
+        transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+      }
+
+      .top-link:hover,
+      .top-link:focus {
+        border-color: rgba(229, 9, 20, 0.35);
+        background: rgba(229, 9, 20, 0.08);
+        transform: translateY(-1px);
+      }
+
+      .top-link::before {
+        content: "←";
+        color: #ffb7bd;
+      }
+
       main {
         max-width: 860px;
       }
@@ -125,6 +152,7 @@
     </style>
   </head>
   <body>
+    <a class="top-link" href="../">Back to home</a>
     <main class="page-card">
       <h1>Couch Privacy Policy</h1>
       <p class="updated">Last updated: October 2, 2026</p>
