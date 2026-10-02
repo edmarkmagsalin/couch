@@ -252,12 +252,12 @@ shadow.innerHTML = `
 
     #edge-tab.has-new-message {
       opacity: 1;
-      background-color: rgb(233 151 7 / 50%);
+      background-color: rgb(229 9 20 / 50%);
     }
 
     section.has-new-message {
       opacity: 1;
-      background-color: rgb(233 151 7 / 50%);
+      background-color: rgb(229 9 20 / 50%);
     }
 
     :host(:hover) section,
@@ -442,7 +442,7 @@ shadow.innerHTML = `
       flex-direction: column;
       gap: 6px;
       font-family: sans-serif;
-      font-size: 14px;
+      font-size: 12px;
       
       /* Scroll & Height Settings */
       height: 100px;
@@ -538,6 +538,46 @@ shadow.innerHTML = `
     .copy-btn:hover {
       transform: scale(1.2);
     }
+
+    #lobby {
+      position: relative;
+    }
+
+    #room-loading {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+      border-radius: 8px;
+      background: rgb(20 20 20 / 92%);
+    }
+
+    #lobby.is-loading #room-loading {
+      display: flex;
+    }
+
+    .room-loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgb(255 255 255 / 25%);
+      border-top-color: #e50914;
+      border-radius: 50%;
+      animation: room-loading-spin 800ms linear infinite;
+    }
+
+    @keyframes room-loading-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .room-loading-spinner {
+        animation: none;
+      }
+    }
   </style>
   <section>
     <header id="drag-handle">
@@ -560,6 +600,10 @@ shadow.innerHTML = `
         <button type="submit" id="join-room-btn" class="btn">Join</button>
       </form>
       <div id="join-error" style="text-align: center; font-size: 10px; height: 10px;"></div>
+      <div id="room-loading" role="status" aria-live="polite" aria-atomic="true">
+        <span class="room-loading-spinner" aria-hidden="true"></span>
+        <span id="room-loading-message">Connecting...</span>
+      </div>
     </div>
 
     <!-- CHAT VIEW -->
@@ -987,17 +1031,43 @@ const joinRoomInput = shadow.getElementById('join-room-input');
 const joinRoomBtn = shadow.getElementById('join-room-btn');
 const joinRoomForm = shadow.getElementById('join-room-form');
 const joinError = shadow.getElementById('join-error');
+const roomLoadingMessage = shadow.getElementById('room-loading-message');
 const usernameInput = shadow.getElementById('username-input');
 const createRoomBtn = shadow.getElementById('create-room-btn');
 const createRoomForm = shadow.getElementById('create-room-form');
 const displayHostName = shadow.getElementById('display-host-name');
+let roomRequestPending = false;
+let roomLoadingTimer = null;
 
 function updateLobbyButtons() {
   const hasUsername = usernameInput.value.trim();
   const hasRoomCode = joinRoomInput.value.trim();
 
-  createRoomBtn.disabled = !hasUsername;
-  joinRoomBtn.disabled = !hasUsername || !hasRoomCode;
+  createRoomBtn.disabled = roomRequestPending || !hasUsername;
+  joinRoomBtn.disabled = roomRequestPending || !hasUsername || !hasRoomCode;
+  usernameInput.disabled = roomRequestPending;
+  joinRoomInput.disabled = roomRequestPending;
+}
+
+function setRoomRequestPending(isPending) {
+  roomRequestPending = isPending;
+
+  if (roomLoadingTimer !== null) {
+    clearTimeout(roomLoadingTimer);
+    roomLoadingTimer = null;
+  }
+
+  if (isPending) {
+    lobbyView.classList.add('is-loading');
+    roomLoadingMessage.textContent = 'Connecting...';
+    roomLoadingTimer = setTimeout(() => {
+      if (roomRequestPending) roomLoadingMessage.textContent = 'Cold starting API...';
+    }, 1500);
+  } else {
+    lobbyView.classList.remove('is-loading');
+  }
+
+  updateLobbyButtons();
 }
 
 usernameInput.addEventListener('input', updateLobbyButtons);
@@ -1033,11 +1103,13 @@ function showRoom(roomId) {
 }
 
 function joinRoom(roomId, action = 'join') {
-  joinRoomBtn.disabled = true;
+  if (roomRequestPending) return;
+
+  setRoomRequestPending(true);
   joinError.textContent = '';
 
   socket.emit('join-room', { roomId, username: myUsername, action }, (response) => {
-    joinRoomBtn.disabled = false;
+    setRoomRequestPending(false);
 
     if (response.success) {
       showRoom(roomId);
