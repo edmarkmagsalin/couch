@@ -2,3 +2,5 @@
 node_modules
 dist
 .env
+
+/preview/video.mp4
