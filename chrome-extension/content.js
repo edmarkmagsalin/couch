@@ -59,6 +59,7 @@ function findVideoElement() {
 let hookedVideo = null;
 let pendingVideoState = null;
 let lastAnnouncedMediaKey = null;
+let remoteSeekTarget = null;
 
 function getVideoTitle(video) {
   const elementTitle = video.getAttribute('title')?.trim();
@@ -86,6 +87,7 @@ function announceMediaChange(video) {
 function applyVideoTime(video, timestamp) {
   isRemoteUpdate = true;
   if (Math.abs(video.currentTime - timestamp) > 0.5) {
+    remoteSeekTarget = { video, timestamp };
     video.currentTime = timestamp;
   }
   setTimeout(() => { isRemoteUpdate = false; }, 50);
@@ -130,7 +132,13 @@ function hookVideo(video) {
   });
 
   video.addEventListener('seeked', () => {
-    if (!currentRoom || isRemoteUpdate || video !== hookedVideo) return;
+    if (!currentRoom || video !== hookedVideo) return;
+    if (remoteSeekTarget?.video === video) {
+      const isRemoteSeek = Math.abs(video.currentTime - remoteSeekTarget.timestamp) <= 0.5;
+      remoteSeekTarget = null;
+      if (isRemoteSeek) return;
+    }
+    if (isRemoteUpdate) return;
     socket.emit('seek-video', { roomId: currentRoom, timestamp: video.currentTime });
     announceVideoAction('seek');
   });
