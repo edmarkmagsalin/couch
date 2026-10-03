@@ -20,9 +20,9 @@ This project is a lightweight browser-based watch-party tool for shared viewing 
 - Releases: https://github.com/edmarkmagsalin/couch/releases
 - Privacy policy: https://edmarkmagsalin.github.io/couch/privacy/
 
-## Install from a ZIP file
+## Install from a GitHub release
 
-If you received Couch as a ZIP file:
+Download `couch-chrome-extension.zip` from the [latest GitHub release](https://github.com/edmarkmagsalin/couch/releases), then:
 
 1. Extract the ZIP file.
 2. Open Chrome and go to `chrome://extensions`.

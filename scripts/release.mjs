@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const manifestPath = 'chrome-extension/manifest.json';
 const remote = 'couch';
@@ -48,9 +50,19 @@ manifest.version = version;
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
 try {
-  execFileSync(process.execPath, ['--env-file-if-exists=.env', 'scripts/package.mjs'], {
-    stdio: 'inherit'
-  });
+  const packageCheckDirectory = mkdtempSync(join(tmpdir(), 'couch-release-check-'));
+
+  try {
+    execFileSync(process.execPath, ['--env-file-if-exists=.env', 'scripts/package.mjs'], {
+      env: {
+        ...process.env,
+        COUCH_PACKAGE_OUTPUT: join(packageCheckDirectory, 'couch-chrome-extension.zip'),
+      },
+      stdio: 'inherit'
+    });
+  } finally {
+    rmSync(packageCheckDirectory, { recursive: true, force: true });
+  }
 } catch (error) {
   writeFileSync(manifestPath, source);
   throw error;
