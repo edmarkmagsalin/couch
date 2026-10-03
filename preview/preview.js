@@ -1,22 +1,46 @@
 const storage = {
-  couch_username: 'Preview User',
-  couch_room: 'preview'
+  couch_username: new URLSearchParams(window.location.hash.slice(1)).get('username')?.trim() || 'Preview User'
 };
 
 const runtimeListeners = [];
 const socketListeners = new Map();
+const connectSocket = window.io;
+let previewSocket;
+let contentScriptLoaded = false;
 
-function formatTimestamp(seconds) {
-  const totalSeconds = Math.floor(seconds);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const remainingSeconds = totalSeconds % 60;
-  const secondsText = remainingSeconds.toString().padStart(2, '0');
+const status = document.getElementById('status');
+const previewVideo = document.querySelector('.fake-player video');
+let videoError = Boolean(previewVideo.error);
+const playbackButtons = [
+  document.getElementById('simulate-remote-seek'),
+  document.getElementById('simulate-remote-play'),
+  document.getElementById('simulate-remote-pause')
+];
 
-  return hours > 0
-    ? `${hours}:${minutes.toString().padStart(2, '0')}:${secondsText}`
-    : `${minutes}:${secondsText}`;
+function updatePreviewStatus() {
+  if (videoError) {
+    status.textContent = 'Could not load /preview/video.mp4. Add the sample video to enable playback simulation.';
+  } else if (!previewVideo.readyState || previewVideo.readyState < HTMLMediaElement.HAVE_METADATA) {
+    status.textContent = contentScriptLoaded
+      ? 'Extension ready. Waiting for /preview/video.mp4...'
+      : 'Loading preview...';
+  } else {
+    status.textContent = 'Ready. Use the expand button in the Couch header.';
+  }
 }
+
+function updatePlaybackAvailability() {
+  videoError = Boolean(previewVideo.error);
+  const hasVideo = previewVideo.readyState >= HTMLMediaElement.HAVE_METADATA
+    && Number.isFinite(previewVideo.duration)
+    && previewVideo.duration > 0;
+  playbackButtons.forEach((button) => { button.disabled = !hasVideo; });
+  updatePreviewStatus();
+}
+
+previewVideo.addEventListener('loadedmetadata', updatePlaybackAvailability);
+previewVideo.addEventListener('error', updatePlaybackAvailability);
+updatePlaybackAvailability();
 
 window.chrome = {
   storage: {
@@ -40,45 +64,17 @@ window.chrome = {
   }
 };
 
-window.io = () => ({
-  emit: (event, data, callback) => {
-    if (event === 'join-room') {
-      callback?.({ success: true, host: 'Preview User' });
-      setTimeout(() => dispatchSocketEvent('sync-room', {
-        host: 'Preview User',
-        video: { status: 'paused', timestamp: 0 },
-        chatHistory: [
-          { sender: 'System', text: 'Preview room ready.', time: Date.now() }
-        ]
-      }), 0);
-    }
-
-    if (event === 'video-action') {
-      const actionText = {
-        play: 'resumed playback',
-        pause: 'paused playback',
-        seek: 'changed the playback time'
-      }[data.action];
-      dispatchSocketEvent('new-message', {
-        sender: 'System',
-        text: `${data.username} ${actionText} at ${formatTimestamp(data.timestamp)}.`,
-        time: Date.now()
-      });
-    }
-
-    if (event === 'media-change') {
-      dispatchSocketEvent('new-message', {
-        sender: 'System',
-        text: `${data.username || 'Preview User'} is playing "${data.title}".`,
-        time: Date.now()
-      });
-    }
-  },
-  on: (event, listener) => {
+window.io = (...args) => {
+  const socket = connectSocket(...args);
+  previewSocket = socket;
+  const subscribe = socket.on.bind(socket);
+  socket.on = (event, listener) => {
     if (!socketListeners.has(event)) socketListeners.set(event, []);
     socketListeners.get(event).push(listener);
+    return subscribe(event, listener);
   }
-});
+  return socket;
+};
 
 function dispatchSocketEvent(event, data) {
   (socketListeners.get(event) || []).forEach((listener) => listener(data));
@@ -92,10 +88,11 @@ function loadContentScript() {
   const script = document.createElement('script');
   script.src = 'chrome-extension/content.js';
   script.onload = () => {
-    document.getElementById('status').textContent = 'Ready. Use the expand button in the Couch header.';
+    contentScriptLoaded = true;
+    updatePreviewStatus();
   };
   script.onerror = () => {
-    document.getElementById('status').textContent = 'Could not load chrome-extension/content.js.';
+    status.textContent = 'Could not load chrome-extension/content.js.';
   };
   document.head.appendChild(script);
 }
@@ -104,31 +101,45 @@ function shadowRoot() {
   return document.getElementById('couch')?.shadowRoot;
 }
 
-const themeToggle = document.getElementById('theme-toggle');
-themeToggle.addEventListener('click', () => {
-  const isLight = document.documentElement.dataset.theme !== 'light';
-  document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
-  themeToggle.textContent = isLight ? 'Switch to dark mode' : 'Switch to light mode';
-});
-
 document.getElementById('simulate-message').addEventListener('click', () => {
+  const roomId = storage.couch_room;
+  const status = document.getElementById('status');
+
+  if (!roomId) {
+    status.textContent = 'Join a room before sending a preview message.';
+    return;
+  }
+
+  if (!previewSocket?.connected) {
+    status.textContent = 'Not connected to the room server. Please try again.';
+    return;
+  }
+
+  const text = `Message ${new Date().toLocaleTimeString()}`;
+  previewSocket.emit('send-message', {
+    roomId,
+    username: storage.couch_username,
+    text
+  });
   dispatchSocketEvent('new-message', {
-    sender: 'Preview Friend',
-    text: `Message ${new Date().toLocaleTimeString()}`,
+    sender: storage.couch_username,
+    text,
     time: Date.now()
   });
+  status.textContent = `Sent "${text}" to room ${roomId}.`;
 });
 
 document.getElementById('simulate-remote-seek').addEventListener('click', () => {
-  dispatchSocketEvent('seek-video', { timestamp: 42 });
+  const timestamp = Math.min(42, previewVideo.duration / 2);
+  dispatchSocketEvent('seek-video', { timestamp });
 });
 
 document.getElementById('simulate-remote-play').addEventListener('click', () => {
-  dispatchSocketEvent('play-video', { timestamp: 42 });
+  dispatchSocketEvent('play-video', { timestamp: previewVideo.currentTime });
 });
 
 document.getElementById('simulate-remote-pause').addEventListener('click', () => {
-  dispatchSocketEvent('pause-video', { timestamp: 42 });
+  dispatchSocketEvent('pause-video', { timestamp: previewVideo.currentTime });
 });
 
 loadContentScript();

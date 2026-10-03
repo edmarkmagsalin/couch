@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Couch Shadow DOM Preview</title>
+  <link rel="stylesheet" href="/docs/styles.css">
+  <link rel="stylesheet" href="/preview/preview.css">
+</head>
+<body>
+  <main class="site-shell preview-shell">
+    <header class="topbar preview-header">
+      <div class="brand">
+        <span class="brand-mark">
+          <img src="/docs/assets/logo.svg" alt="">
+        </span>
+        <span class="brand-word">couch</span>
+      </div>
+      <span class="eyebrow">Extension preview</span>
+    </header>
+
+    <section class="hero-panel preview-panel">
+      <h1>Couch Shadow DOM Preview</h1>
+      <p class="hero-copy">Open this page twice with different <code>#username=</code> values, then create a room in one and join it from the other. Add a sample video at <code>preview/video.mp4</code> to enable playback simulation.</p>
+
+      <div class="controls">
+        <button class="button secondary" id="simulate-message" type="button">Simulate message</button>
+        <button class="button secondary" id="simulate-remote-seek" type="button" disabled>Simulate remote seek</button>
+        <button class="button secondary" id="simulate-remote-play" type="button" disabled>Simulate remote play</button>
+        <button class="button secondary" id="simulate-remote-pause" type="button" disabled>Simulate remote pause</button>
+      </div>
+
+      <section class="fake-player" aria-label="Fake video player">
+        <video controls preload="metadata" src="/preview/video.mp4"></video>
+        <span class="player-label">Fake video player</span>
+      </section>
+      <div id="status" role="status">Loading preview...</div>
+    </section>
+  </main>
+  <script src="/chrome-extension/socket.io.js"></script>
+  <script src="/preview/preview.js"></script>
+</body>
+</html>

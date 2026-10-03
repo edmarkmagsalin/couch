@@ -1,0 +1,71 @@
+.preview-header {
+  margin-bottom: 24px;
+}
+
+.preview-panel {
+  padding: 42px 28px 28px;
+}
+
+.preview-panel h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.preview-panel .hero-copy {
+  max-width: 75ch;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 24px 0;
+}
+
+.controls .button {
+  width: auto;
+  cursor: pointer;
+  font: inherit;
+}
+
+.fake-player {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(229, 9, 20, 0.16));
+  overflow: hidden;
+}
+
+.fake-player video {
+  width: 100%;
+  height: 360px;
+  object-fit: cover;
+  background: linear-gradient(135deg, rgba(17, 17, 17, 0.2), rgba(229, 9, 20, 0.15));
+}
+
+.player-label {
+  position: absolute;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  pointer-events: none;
+}
+
+#status {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 520px) {
+  .preview-panel {
+    padding: 32px 16px 20px;
+  }
+
+  .controls .button {
+    width: 100%;
+  }
+}
