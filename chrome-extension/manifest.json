@@ -22,7 +22,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/icon128.png"],
+      "resources": ["assets/couch.svg"],
       "matches": ["<all_urls>"]
     }
   ]

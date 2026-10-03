@@ -6,6 +6,9 @@ import { extname, resolve } from 'node:path';
 const port = process.env.PORT || 4173;
 const root = process.cwd();
 const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
   '.mp4': 'video/mp4',
   '.svg': 'image/svg+xml'
 };

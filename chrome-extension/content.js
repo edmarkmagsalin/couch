@@ -197,8 +197,10 @@ const shadow = hostContainer.attachShadow({ mode: 'open' });
 shadow.innerHTML = `
   <style>
     :host {
+      --couch-accent: rgb(229 9 20);
       display: block;
       font-size: 12px;
+      line-height: 1;
       transition: transform 180ms ease;
     }
 
@@ -219,7 +221,7 @@ shadow.innerHTML = `
       background-color: rgb(255 255 255 / 10%);
       backdrop-filter: blur(20px);
       border-radius: 12px;
-      border: solid 2px #e50914;
+      border: solid 2px var(--couch-accent);
     }
 
     section.blurred,
@@ -228,8 +230,7 @@ shadow.innerHTML = `
     }
 
     #edge-tab {
-      transition: opacity 1s ease;
-      transition: background 1s ease;
+      transition: opacity 1s ease, background-position 450ms ease, filter 180ms ease;
       display: none;
       position: absolute;
       top: 50%;
@@ -239,25 +240,35 @@ shadow.innerHTML = `
       transform: translateY(-50%);
       cursor: pointer;
       color: white;
-      border: solid 1px #e50914;
-      background-color: rgb(255 255 255 / 10%);
-      font-size: 18px;
+      border: solid 1px var(--couch-accent);
+      background-color: var(--couch-accent);
+      background-image: linear-gradient(
+        110deg,
+        transparent 25%,
+        rgb(255 255 255 / 28%) 45%,
+        transparent 65%
+      );
+      background-size: 250% 100%;
+      background-position: 100% 0;
+      font-size: 10px;
       cursor: pointer;
       opacity: 1;
     }
 
-    #edge-tab:hover {
+    #edge-tab:is(:hover, :focus-visible) {
       opacity: 1;
+      background-position: 0 0;
+      filter: brightness(1.08);
     }
 
-    #edge-tab.has-new-message {
-      opacity: 1;
-      background-color: rgb(229 9 20 / 50%);
-    }
-
+    #edge-tab.has-new-message,
     section.has-new-message {
-      opacity: 1;
-      background-color: rgb(229 9 20 / 50%);
+      animation: new-message-pulse 1.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes new-message-pulse {
+      from { opacity: 0.5; }
+      to { opacity: 1; }
     }
 
     :host(:hover) section,
@@ -305,7 +316,33 @@ shadow.innerHTML = `
       color: white; 
       border: none; 
       border-radius: 4px; 
-      background-color: #e50914;
+      background-color: var(--couch-accent);
+      background-image: linear-gradient(
+        110deg,
+        transparent 25%,
+        rgb(255 255 255 / 28%) 45%,
+        transparent 65%
+      );
+      background-size: 250% 100%;
+      background-position: 100% 0;
+      transition: background-position 450ms ease, filter 180ms ease;
+    }
+
+    .btn:not(.secondary):not(:disabled):is(:hover, :focus-visible) {
+      background-position: 0 0;
+      filter: brightness(1.08);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn,
+      #edge-tab {
+        transition: none;
+      }
+
+      #edge-tab.has-new-message,
+      section.has-new-message {
+        animation: none;
+      }
     }
 
     .btn:disabled {
@@ -315,6 +352,12 @@ shadow.innerHTML = `
 
     .btn.secondary {
       background-color: black;
+      background-image: none;
+      transition: background-color 160ms ease;
+    }
+
+    .btn.secondary:not(:disabled):is(:hover, :focus-visible) {
+      background-color: #1f1f1f;
     }
 
     .btn.small {
@@ -329,32 +372,54 @@ shadow.innerHTML = `
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-radius: 12px 12px 0 0;
-      padding: 4px 8px;
-      background-color: rgb(255 255 255 / 10%);
+      border-radius: 9px 9px 0 0;
+      min-height: 30px;
+      padding: 0px 12px;
+      background: linear-gradient(
+        115deg, var(--couch-accent),
+        color-mix(in srgb, var(--couch-accent), black 27%) 68%,
+        color-mix(in srgb, var(--couch-accent), black 48%)
+      );
       font-variant: small-caps;
     }
 
     .brand-label {
-      background: linear-gradient(90deg, #e50914, #e509147a);
-      background-clip: text;
-      -webkit-background-clip: text;
-      color: transparent;
-      -webkit-text-fill-color: transparent;
-      font-weight: 700;
-      font-size: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: white;
+      -webkit-text-fill-color: white;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      text-shadow: 0 2px 12px rgb(0 0 0 / 35%);
+    }
+
+    .brand-icon {
+      display: block;
+      width: 28px;
+      height: auto;
+      flex: 0 0 auto;
+      transform: translateY(1px);
     }
 
     header:active { cursor: all-scroll; }
 
     .view-toggle-btn {
-      padding: 0 4px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
       cursor: pointer;
-      color: rgb(255 255 255 / 75%);
-      border: 0;
-      background: transparent;
-      font-size: 10px;
+      color: white;
+      border: 1px solid rgb(255 255 255 / 35%);
+      border-radius: 8px;
+      background: rgb(0 0 0 / 16%);
+      font-size: 8px;
       line-height: 1;
+    }
+
+    .view-toggle-btn:hover {
+      background: rgb(0 0 0 / 30%);
     }
 
     :host(.docked-left) #edge-tab,
@@ -430,6 +495,18 @@ shadow.innerHTML = `
       align-items: center;
     }
 
+    #display-room-id[data-copy-state="copied"]::after {
+      content: " ✓";
+      color: #86efac;
+    }
+
+    #display-room-id[data-copy-state="error"]::after {
+      content: " Copy failed";
+      color: #fca5a5;
+      font-family: sans-serif;
+      font-size: 9px;
+    }
+
     /* Message List & Scrollable Area */
     #messages {
       border-top: 1px solid rgb(255 255 255 / 10%);
@@ -492,7 +569,7 @@ shadow.innerHTML = `
     }
 
     .message-row.right:not(.system) .message-content:not(.emoji-only) {
-      background: #e50914;
+      background: var(--couch-accent);
     }
 
     .message-row.system {
@@ -546,18 +623,6 @@ shadow.innerHTML = `
       gap: 10px;
     }
 
-    .copy-btn {
-      transition: transform 0.4s ease;
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 10px;
-    }
-
-    .copy-btn:hover {
-      transform: scale(1.2);
-    }
-
     #lobby {
       position: relative;
     }
@@ -571,7 +636,7 @@ shadow.innerHTML = `
       justify-content: center;
       flex-direction: column;
       gap: 10px;
-      border-radius: 8px;
+      border-radius: 0 0 10px 10px;
       background: rgb(20 20 20 / 92%);
     }
 
@@ -583,7 +648,7 @@ shadow.innerHTML = `
       width: 24px;
       height: 24px;
       border: 3px solid rgb(255 255 255 / 25%);
-      border-top-color: #e50914;
+      border-top-color: var(--couch-accent);
       border-radius: 50%;
       animation: room-loading-spin 800ms linear infinite;
     }
@@ -600,7 +665,10 @@ shadow.innerHTML = `
   </style>
   <section>
     <header id="drag-handle">
-      <span class="brand-label">couch</span>
+      <span class="brand-label">
+        <img class="brand-icon" src="${chrome.runtime.getURL('assets/couch.svg')}" alt="couch" draggable="false">
+        <span>couch</span>
+      </span>
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
     
@@ -628,11 +696,7 @@ shadow.innerHTML = `
     <!-- CHAT VIEW -->
     <div id="chat-container">
       <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: inherit;">
-        <div style="display: flex; align-items: center;">
-          <span><strong id="display-room-id">...</strong></span>
-          <!-- NEW: Copy Room Code Button -->
-          <button id="copy-code-btn" class="copy-btn" title="Copy Room Code">📋</button>
-        </div>
+        <button id="display-room-id" class="btn small" type="button" title="Copy room code" aria-label="Copy room code">...</button>
         <button id="leave-room-btn" class="btn small secondary">Exit</button>
       </div>
       <main><ul id="messages"></ul></main>
@@ -657,6 +721,7 @@ shadow.innerHTML = `
             <button class="emoji-btn" title="Perfect">💯</button>
             <button class="emoji-btn" title="Sparkles">✨</button>
             <button class="emoji-btn" title="Handshake">🤝</button>
+            <button class="emoji-btn" title="Synced">🔗</button>
           </div>
           
           <!-- NEW: Timestamp Button -->
@@ -676,7 +741,7 @@ shadow.innerHTML = `
       <div id="compact-messages"></div>
     </div>
   </section>
-  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch">‹</button>
+  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch">◀</button>
 `;
 document.body.appendChild(hostContainer);
 
@@ -817,7 +882,7 @@ function setDockedEdge(edge) {
   dockedEdge = edge;
   hostContainer.classList.toggle('docked-left', edge === 'left');
   hostContainer.classList.toggle('docked-right', edge === 'right');
-  edgeTab.textContent = edge === 'left' ? '›' : '‹';
+  edgeTab.textContent = edge === 'left' ? '▶' : '◀';
   edgeTab.title = 'Show Couch';
   edgeTab.setAttribute('aria-label', 'Show Couch');
 }
@@ -1221,16 +1286,30 @@ timestampBtn.addEventListener('click', () => {
   emitLocalChatMessage(messageText);
 });
 
-const copyCodeBtn = shadow.getElementById('copy-code-btn');
+let copyFeedbackTimer = null;
 
-copyCodeBtn.addEventListener('click', () => {
+displayRoomId.addEventListener('click', () => {
   if (!currentRoom) return;
 
-  navigator.clipboard.writeText(currentRoom).then(() => {
-    copyCodeBtn.textContent = '✓';
-    setTimeout(() => {
-      copyCodeBtn.textContent = '📋';
+  const showCopyState = (state, label) => {
+    displayRoomId.dataset.copyState = state;
+    displayRoomId.setAttribute('aria-label', label);
+    displayRoomId.title = label;
+
+    if (copyFeedbackTimer !== null) clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = setTimeout(() => {
+      delete displayRoomId.dataset.copyState;
+      displayRoomId.setAttribute('aria-label', 'Copy room code');
+      displayRoomId.title = 'Copy room code';
+      copyFeedbackTimer = null;
     }, 2000);
+  };
+
+  navigator.clipboard.writeText(currentRoom).then(() => {
+    showCopyState('copied', 'Room code copied');
+  }).catch((error) => {
+    console.error('Failed to copy room code:', error);
+    showCopyState('error', 'Could not copy room code');
   });
 });
 
