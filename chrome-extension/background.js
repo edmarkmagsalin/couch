@@ -16,7 +16,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     });
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['socket.io.js', 'content.js']
+      files: ['couch-shared.js', 'socket.io.js', 'content.js']
     });
   } catch (error) {
     console.debug('Couch is unavailable on this tab.', error);

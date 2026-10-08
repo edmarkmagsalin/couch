@@ -1,0 +1,18 @@
+:host {
+  --couch-chat-height: 180px;
+}
+
+#lobby.remote-expanded,
+#chat-container.remote-expanded {
+  display: flex !important;
+}
+
+#lobby.remote-hidden,
+#chat-container.remote-hidden,
+#compact-view.remote-hidden {
+  display: none !important;
+}
+
+#connection-status {
+  color: #aeb4bb;
+}

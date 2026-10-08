@@ -42,7 +42,7 @@ io.on('connection', (socket) => {
 
     if (!roomStates[roomId]) {
       roomStates[roomId] = {
-        video: { status: 'paused', timestamp: 0 },
+        video: { status: 'paused', timestamp: 0, updatedAt: Date.now() },
         chatHistory: [],
         host: username,
         hostSocketId: socket.id,
@@ -143,22 +143,31 @@ io.on('connection', (socket) => {
   });
 
   // --- VIDEO EVENTS ---
-  socket.on('play-video', ({ roomId, timestamp }) => {
+  socket.on('play-video', ({ roomId, timestamp }, callback) => {
     if (!roomStates[roomId]) return; // Safety check for missing room state
-    roomStates[roomId].video = { status: 'playing', timestamp };
-    socket.to(roomId).emit('play-video', { timestamp });
+    const updatedAt = Date.now();
+    roomStates[roomId].video = { status: 'playing', timestamp, updatedAt };
+    socket.to(roomId).emit('play-video', { timestamp, updatedAt });
+    if (typeof callback === 'function') callback({ updatedAt });
   });
 
-  socket.on('pause-video', ({ roomId, timestamp }) => {
+  socket.on('pause-video', ({ roomId, timestamp }, callback) => {
     if (!roomStates[roomId]) return; // Safety check for missing room state
-    roomStates[roomId].video = { status: 'paused', timestamp };
-    socket.to(roomId).emit('pause-video', { timestamp });
+    const updatedAt = Date.now();
+    roomStates[roomId].video = { status: 'paused', timestamp, updatedAt };
+    socket.to(roomId).emit('pause-video', { timestamp, updatedAt });
+    if (typeof callback === 'function') callback({ updatedAt });
   });
 
-  socket.on('seek-video', ({ roomId, timestamp }) => {
+  socket.on('seek-video', ({ roomId, timestamp }, callback) => {
     if (!roomStates[roomId]) return; // Safety check for missing room state
     roomStates[roomId].video.timestamp = timestamp;
-    socket.to(roomId).emit('seek-video', { timestamp });
+    roomStates[roomId].video.updatedAt = Date.now();
+    socket.to(roomId).emit('seek-video', {
+      timestamp,
+      updatedAt: roomStates[roomId].video.updatedAt
+    });
+    if (typeof callback === 'function') callback({ updatedAt: roomStates[roomId].video.updatedAt });
   });
 
   socket.on('media-change', ({ roomId, title, mediaKey }) => {
@@ -215,7 +224,10 @@ io.on('connection', (socket) => {
     console.log(`[CHAT] ${username} in ${roomId}: ${text}`);
 
     if (!roomStates[roomId]) {
-      roomStates[roomId] = { video: { status: 'paused', timestamp: 0 }, chatHistory: [] };
+      roomStates[roomId] = {
+        video: { status: 'paused', timestamp: 0, updatedAt: Date.now() },
+        chatHistory: []
+      };
     }
 
     const chatMessage = { sender: username, text: text, time: Date.now() };

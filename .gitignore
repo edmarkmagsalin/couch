@@ -3,4 +3,8 @@ node_modules
 dist
 .env
 
-/preview/video.mp4
+/frontend/video.mp4
+/frontend/panel.html
+/frontend/panel.css
+/frontend/couch-shared.js
+/frontend/assets/couch.svg

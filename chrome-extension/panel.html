@@ -1,0 +1,79 @@
+<section>
+    <header id="drag-handle">
+      <span class="brand-label">
+        <img class="brand-icon" src="__COUCH_LOGO_URL__" alt="couch" draggable="false">
+        <span>couch</span>
+      </span>
+      <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
+    </header>
+
+    <!-- LOBBY VIEW -->
+    <div id="lobby">
+      <!-- UPDATED: Username section without a separate button -->
+      <form id="create-room-form" class="flex-column">
+        <input type="text" id="username-input" placeholder="Username" autocomplete="off"/>
+        <button type="submit" id="create-room-btn" class="btn">Create New Room</button>
+      </form>
+
+      <hr width="100%" border="1" class="muted">
+
+      <form id="join-room-form" class="flex">
+        <input type="text" id="join-room-input" placeholder="Room Code" autocomplete="off"/>
+        <button type="submit" id="join-room-btn" class="btn">Join</button>
+      </form>
+      <div id="join-error" style="text-align: center; font-size: 10px; height: 10px;"></div>
+      <div id="room-loading" role="status" aria-live="polite" aria-atomic="true">
+        <span class="room-loading-spinner" aria-hidden="true"></span>
+        <span id="room-loading-message">Connecting...</span>
+      </div>
+    </div>
+
+    <!-- CHAT VIEW -->
+    <div id="chat-container">
+      <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: inherit;">
+        <button id="display-room-id" class="btn small" type="button" title="Copy room code" aria-label="Copy room code">...</button>
+        <button id="leave-room-btn" class="btn small secondary">Exit</button>
+      </div>
+      <main><ul id="messages"></ul></main>
+      <footer>
+        <!-- Toolbar containing Emojis and Timestamp Button -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3.2px 8px;">
+          <div id="emoji-bar">
+            <button class="emoji-btn" title="Clap">👏</button>
+            <button class="emoji-btn" title="Laugh">😂</button>
+            <button class="emoji-btn" title="Heart">♥️</button>
+            <button class="emoji-btn" title="Scared">😱</button>
+            <button class="emoji-btn" title="Surprise">😲</button>
+            <button class="emoji-btn" title="Sad">😢</button>
+            <button class="emoji-btn" title="Goodbye">👋</button>
+            <button class="emoji-btn" title="Splash">💦</button>
+            <button class="emoji-btn" title="Paper">🧻</button>
+            <button class="emoji-btn" title="Thumbs Up">👍</button>
+            <button class="emoji-btn" title="Fire">🔥</button>
+            <button class="emoji-btn" title="Happy">😄</button>
+            <button class="emoji-btn" title="Cool">😎</button>
+            <button class="emoji-btn" title="Party">🥳</button>
+            <button class="emoji-btn" title="Perfect">💯</button>
+            <button class="emoji-btn" title="Sparkles">✨</button>
+            <button class="emoji-btn" title="Handshake">🤝</button>
+            <button class="emoji-btn" title="Synced">🔗</button>
+          </div>
+
+          <!-- NEW: Timestamp Button -->
+          <button id="timestamp-btn" class="emoji-btn" title="Share current video timestamp">⏱️</button>
+        </div>
+
+
+        <div style="padding: 0 8px 8px 8px;">
+          <form id="chat-form" style="display: flex;">
+            <input type="text" id="chat-input" placeholder="Type..." autocomplete="off" required />
+          </form>
+        </div>
+      </footer>
+    </div>
+
+    <div id="compact-view" title="Open Couch">
+      <div id="compact-messages"></div>
+    </div>
+  </section>
+  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch">◀</button>

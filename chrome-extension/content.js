@@ -1,3 +1,4 @@
+async function initializeCouch() {
 // 1. Setup Variables
 const socket = io('https://couch-sl1x.onrender.com');
 let isRemoteUpdate = false;
@@ -5,18 +6,6 @@ let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
 let currentHost = null; // Track current room host
 let isCompactView = true;
-
-const sessionReady = chrome.storage.local.get(['couch_username', 'couch_room']).then((session) => {
-  myUsername = session.couch_username || localStorage.getItem('couch_username');
-  usernameInput.value = myUsername;
-  updateLobbyButtons();
-
-  if (!session.couch_username) {
-    chrome.storage.local.set({ couch_username: myUsername });
-  }
-
-  return session.couch_room || null;
-});
 
 // Helper to generate a random 6-character room code (e.g., "x7b9kq")
 function generateRoomCode() {
@@ -202,555 +191,10 @@ hostContainer.style.cssText = `
 `;
 
 const shadow = hostContainer.attachShadow({ mode: 'open' });
-shadow.innerHTML = `
-  <style>
-    :host {
-      --couch-accent: rgb(229 9 20);
-      display: block;
-      font-size: 12px;
-      line-height: 1;
-      transition: transform 180ms ease;
-    }
-
-    :host(.docked-left) {
-      transform: translateX(calc(-100% + -25px));
-    }
-
-    :host(.docked-right) {
-      transform: translateX(calc(100% - -25px));
-    }
-
-    section {
-      transition: opacity 1s ease;
-      transition: background 1s ease;
-      box-sizing: border-box;
-      width: 100%;
-      opacity: 1;
-      background-color: rgb(255 255 255 / 10%);
-      backdrop-filter: blur(20px);
-      border-radius: 12px;
-      border: solid 2px var(--couch-accent);
-    }
-
-    section.blurred,
-    #edge-tab.blurred {
-      opacity: 0.2;
-    }
-
-    #edge-tab {
-      transition: opacity 1s ease, background-position 450ms ease, filter 180ms ease;
-      display: none;
-      position: absolute;
-      top: 50%;
-      width: 28px;
-      height: 56px;
-      padding: 0;
-      transform: translateY(-50%);
-      cursor: pointer;
-      color: white;
-      border: solid 1px var(--couch-accent);
-      background-color: var(--couch-accent);
-      background-image: linear-gradient(
-        110deg,
-        transparent 25%,
-        rgb(255 255 255 / 28%) 45%,
-        transparent 65%
-      );
-      background-size: 250% 100%;
-      background-position: 100% 0;
-      font-size: 10px;
-      cursor: pointer;
-      opacity: 1;
-    }
-
-    #edge-tab:is(:hover, :focus-visible) {
-      opacity: 1;
-      background-position: 0 0;
-      filter: brightness(1.08);
-    }
-
-    #edge-tab.has-new-message,
-    section.has-new-message {
-      animation: new-message-pulse 1.4s ease-in-out infinite alternate;
-    }
-
-    @keyframes new-message-pulse {
-      from { opacity: 0.5; }
-      to { opacity: 1; }
-    }
-
-    :host(:hover) section,
-    :host(:focus-within) section,
-    :host(.is-focused) section,
-    :host(:active) section {
-      opacity: 1;
-    }
-
-    * {
-      color: rgb(255 255 255 / 75%);
-      font-family: sans-serif; 
-    }
-
-    button,
-    input {
-      font: inherit;
-    }
-
-    input {
-      border-radius: 8px;
-      height: 16px;
-      padding: 8px;
-      box-shadow: none;
-      appearance: none;
-      -webkit-appearance: none;
-      outline: none;
-      border: 1px solid rgb(255 255 255 / 20%);
-      background-color: rgb(255 255 255 / 10%);
-      flex-grow: 1;
-      transition: border-color 150ms ease, box-shadow 150ms ease;
-    }
-
-    input:focus {
-      border-color: rgb(229 9 20 / 40%);
-    }
-
-    input::placeholder {
-      color: rgb(255 255 255 / 30%);
-    }
-    
-    .btn {
-      padding: 8px;
-      cursor: pointer;
-      color: white; 
-      border: none; 
-      border-radius: 4px; 
-      background-color: var(--couch-accent);
-      background-image: linear-gradient(
-        110deg,
-        transparent 25%,
-        rgb(255 255 255 / 28%) 45%,
-        transparent 65%
-      );
-      background-size: 250% 100%;
-      background-position: 100% 0;
-      transition: background-position 450ms ease, filter 180ms ease;
-    }
-
-    .btn:not(.secondary):not(:disabled):is(:hover, :focus-visible) {
-      background-position: 0 0;
-      filter: brightness(1.08);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .btn,
-      #edge-tab {
-        transition: none;
-      }
-
-      #edge-tab.has-new-message,
-      section.has-new-message {
-        animation: none;
-      }
-    }
-
-    .btn:disabled {
-      cursor: not-allowed;
-      opacity: 0.45;
-    }
-
-    .btn.secondary {
-      background-color: black;
-      background-image: none;
-      transition: background-color 160ms ease;
-    }
-
-    .btn.secondary:not(:disabled):is(:hover, :focus-visible) {
-      background-color: #1f1f1f;
-    }
-
-    .btn.small {
-      font-size: 9px;
-      padding: 3px 6px;
-    }
-
-    header { 
-      cursor: all-scroll;
-      user-select: none; 
-      font-family: sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-radius: 9px 9px 0 0;
-      min-height: 30px;
-      padding: 0px 12px;
-      background: linear-gradient(
-        115deg, var(--couch-accent),
-        color-mix(in srgb, var(--couch-accent), black 27%) 68%,
-        color-mix(in srgb, var(--couch-accent), black 48%)
-      );
-      font-variant: small-caps;
-    }
-
-    .brand-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: white;
-      -webkit-text-fill-color: white;
-      font-weight: 800;
-      font-size: 16px;
-      letter-spacing: 0.08em;
-      text-shadow: 0 2px 12px rgb(0 0 0 / 35%);
-    }
-
-    .brand-icon {
-      display: block;
-      width: 28px;
-      height: auto;
-      flex: 0 0 auto;
-      transform: translateY(1px);
-    }
-
-    header:active { cursor: all-scroll; }
-
-    .view-toggle-btn {
-      width: 20px;
-      height: 20px;
-      padding: 0;
-      cursor: pointer;
-      color: white;
-      border: 1px solid rgb(255 255 255 / 35%);
-      border-radius: 8px;
-      background: rgb(0 0 0 / 16%);
-      font-size: 8px;
-      line-height: 1;
-    }
-
-    .view-toggle-btn:hover {
-      background: rgb(0 0 0 / 30%);
-    }
-
-    :host(.docked-left) #edge-tab,
-    :host(.docked-right) #edge-tab {
-      display: block;
-    }
-
-    :host(.docked-left) #edge-tab {
-      top: 20px;
-      right: -40px;
-      border-radius: 0 8px 8px 0;
-    }
-
-    :host(.docked-right) #edge-tab {
-      top: 20px;
-      left: -40px;
-      border-radius: 8px 0 0 8px;
-    }
-
-    /* Lobby Styles */
-    #lobby {
-      padding: 15px;
-      display: none;
-      flex-direction: column;
-      gap: 10px;
-    }
-    
-    /* Chat Container Styles */
-    #chat-container { 
-      display: none; 
-      flex-direction: column; 
-    }
-
-    #compact-view {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 8px;
-      cursor: default;
-    }
-
-    #compact-messages {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      max-height: 34px;
-      overflow: hidden;
-      cursor: pointer;
-    }
-
-    #compact-messages:empty::before {
-      content: 'Welcome to Couch!';
-      font-size: 10px;
-      line-height: 15px;
-      opacity: 0.7;
-      text-align: center;
-    }
-
-    .compact-message {
-      overflow: hidden;
-      font-size: 10px;
-      line-height: 15px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .room-header { 
-      font-size: inherit; 
-      padding: 4px 5px; 
-      font-family: monospace; 
-      display: flex; 
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    #display-room-id[data-copy-state="copied"]::after {
-      content: " ✓";
-      color: #86efac;
-    }
-
-    #display-room-id[data-copy-state="error"]::after {
-      content: " Copy failed";
-      color: #fca5a5;
-      font-family: sans-serif;
-      font-size: 9px;
-    }
-
-    /* Message List & Scrollable Area */
-    #messages {
-      border-top: 1px solid rgb(255 255 255 / 10%);
-      border-bottom: 1px solid rgb(255 255 255 / 10%);
-      list-style-type: none;
-      margin: 0;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-family: sans-serif;
-      font-size: 12px;
-      
-      /* Scroll & Height Settings */
-      height: 130px;
-      max-height: 130px;
-      overflow-y: auto;
-      
-      /* Hide scrollbar for Chrome, Safari, Opera, and Firefox */
-      scrollbar-width: none; 
-    }
-
-    #messages::-webkit-scrollbar {
-      display: none; 
-    }
-
-    /* Message Row Alignments (Plain Text) */
-    .message-row {
-      width: 100%;
-      font-size: inherit;
-      word-break: break-word;
-    }
-
-    .message-row.left {
-      align-self: start;
-      max-width: 80%;
-      text-align: left;
-    }
-
-    .message-row.right {
-      align-self: flex-end;
-      max-width: 80%;
-      text-align: right;
-    }
-
-    .sender-label {
-      display: block;
-      margin: 0 0 2px 4px;
-      font-size: 8px;
-      line-height: 1;
-      opacity: 0.75;
-    }
-
-    .message-row:not(.system) .message-content:not(.emoji-only) {
-      display: inline-block;
-      padding: 5px 8px;
-      border-radius: 10px;
-      background: rgb(255 255 255 / 14%);
-      text-align: left;
-    }
-
-    .message-row.right:not(.system) .message-content:not(.emoji-only) {
-      background: var(--couch-accent);
-    }
-
-    .message-row.system {
-      text-align: center;
-      font-style: italic;
-      font-size: 9.6px;
-      opacity: 0.5;
-    }
-    .message-content.emoji-only {
-      font-size: 32px;
-      line-height: 1.2;
-    }
-    .message-row a {
-      color: inherit;
-      text-decoration: underline;
-      word-break: break-all;
-    }
-    .emoji-btn {
-      transition: transform 0.4s ease;
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 20px;
-      padding: 2px;
-      border-radius: 4px;
-    }
-    .emoji-btn:hover {
-      transform: scale(1.2)
-    }
-    .muted {
-      opacity: .5;
-    }
-    #emoji-bar {
-      display: flex;
-      gap: 6px;
-      max-width: 190px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none;
-      white-space: nowrap;
-    }
-
-    .flex {
-      display: flex;
-      gap: 10px;
-    }
-
-    .flex-column {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    #lobby {
-      position: relative;
-    }
-
-    #room-loading {
-      display: none;
-      position: absolute;
-      inset: 0;
-      z-index: 1;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 10px;
-      border-radius: 0 0 10px 10px;
-      background: rgb(20 20 20 / 92%);
-    }
-
-    #lobby.is-loading #room-loading {
-      display: flex;
-    }
-
-    .room-loading-spinner {
-      width: 24px;
-      height: 24px;
-      border: 3px solid rgb(255 255 255 / 25%);
-      border-top-color: var(--couch-accent);
-      border-radius: 50%;
-      animation: room-loading-spin 800ms linear infinite;
-    }
-
-    @keyframes room-loading-spin {
-      to { transform: rotate(360deg); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .room-loading-spinner {
-        animation: none;
-      }
-    }
-  </style>
-  <section>
-    <header id="drag-handle">
-      <span class="brand-label">
-        <img class="brand-icon" src="${chrome.runtime.getURL('assets/couch.svg')}" alt="couch" draggable="false">
-        <span>couch</span>
-      </span>
-      <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
-    </header>
-    
-    <!-- LOBBY VIEW -->
-    <div id="lobby">
-      <!-- UPDATED: Username section without a separate button -->
-      <form id="create-room-form" class="flex-column">
-        <input type="text" id="username-input" placeholder="Username" autocomplete="off"/>
-        <button type="submit" id="create-room-btn" class="btn">Create New Room</button>
-      </form>
-
-      <hr width="100%" border="1" class="muted">
-
-      <form id="join-room-form" class="flex">
-        <input type="text" id="join-room-input" placeholder="Room Code" autocomplete="off"/>
-        <button type="submit" id="join-room-btn" class="btn">Join</button>
-      </form>
-      <div id="join-error" style="text-align: center; font-size: 10px; height: 10px;"></div>
-      <div id="room-loading" role="status" aria-live="polite" aria-atomic="true">
-        <span class="room-loading-spinner" aria-hidden="true"></span>
-        <span id="room-loading-message">Connecting...</span>
-      </div>
-    </div>
-
-    <!-- CHAT VIEW -->
-    <div id="chat-container">
-      <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: inherit;">
-        <button id="display-room-id" class="btn small" type="button" title="Copy room code" aria-label="Copy room code">...</button>
-        <button id="leave-room-btn" class="btn small secondary">Exit</button>
-      </div>
-      <main><ul id="messages"></ul></main>
-      <footer>
-        <!-- Toolbar containing Emojis and Timestamp Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3.2px 8px;">
-          <div id="emoji-bar">
-            <button class="emoji-btn" title="Clap">👏</button>
-            <button class="emoji-btn" title="Laugh">😂</button>
-            <button class="emoji-btn" title="Heart">♥️</button>
-            <button class="emoji-btn" title="Scared">😱</button>
-            <button class="emoji-btn" title="Surprise">😲</button>
-            <button class="emoji-btn" title="Sad">😢</button>
-            <button class="emoji-btn" title="Goodbye">👋</button>
-            <button class="emoji-btn" title="Splash">💦</button>
-            <button class="emoji-btn" title="Paper">🧻</button>
-            <button class="emoji-btn" title="Thumbs Up">👍</button>
-            <button class="emoji-btn" title="Fire">🔥</button>
-            <button class="emoji-btn" title="Happy">😄</button>
-            <button class="emoji-btn" title="Cool">😎</button>
-            <button class="emoji-btn" title="Party">🥳</button>
-            <button class="emoji-btn" title="Perfect">💯</button>
-            <button class="emoji-btn" title="Sparkles">✨</button>
-            <button class="emoji-btn" title="Handshake">🤝</button>
-            <button class="emoji-btn" title="Synced">🔗</button>
-          </div>
-          
-          <!-- NEW: Timestamp Button -->
-          <button id="timestamp-btn" class="emoji-btn" title="Share current video timestamp">⏱️</button>
-        </div>
-        
-        
-        <div style="padding: 0 8px 8px 8px;">
-          <form id="chat-form" style="display: flex;">
-            <input type="text" id="chat-input" placeholder="Type..." autocomplete="off" required />
-          </form>
-        </div>
-      </footer>
-    </div>
-
-    <div id="compact-view" title="Open Couch">
-      <div id="compact-messages"></div>
-    </div>
-  </section>
-  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch">◀</button>
-`;
+const panelResponse = await fetch(chrome.runtime.getURL('panel.html'));
+if (!panelResponse.ok) throw new Error(`Panel template request failed: ${panelResponse.status}`);
+const panelMarkup = await panelResponse.text();
+shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('panel.css')}">${panelMarkup.replaceAll('__COUCH_LOGO_URL__', chrome.runtime.getURL('assets/couch.svg'))}`;
 document.body.appendChild(hostContainer);
 
 function syncFullscreenHost() {
@@ -1041,27 +485,13 @@ function createSenderLabel(sender, isHost) {
   return wrapper;
 }
 
-const emojiSegmenter = typeof Intl.Segmenter === 'function'
-  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-  : null;
-
-function isSingleEmoji(text) {
-  const trimmedText = String(text ?? '').trim();
-  if (!trimmedText || !emojiSegmenter) return false;
-
-  const segments = [...emojiSegmenter.segment(trimmedText)];
-  if (segments.length !== 1) return false;
-
-  return /(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3)/u.test(segments[0].segment);
-}
-
 function appendMessage(sender, text) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
 
   const messageContent = document.createElement('span');
   messageContent.className = 'message-content';
-  if (isSingleEmoji(text)) messageContent.classList.add('emoji-only');
+  if (CouchShared.isSingleEmoji(text)) messageContent.classList.add('emoji-only');
 
   const compactRow = document.createElement('div');
   compactRow.className = 'compact-message';
@@ -1128,6 +558,18 @@ const usernameInput = shadow.getElementById('username-input');
 const createRoomBtn = shadow.getElementById('create-room-btn');
 const createRoomForm = shadow.getElementById('create-room-form');
 const displayHostName = shadow.getElementById('display-host-name');
+
+const sessionReady = chrome.storage.local.get(['couch_username', 'couch_room']).then((session) => {
+  myUsername = session.couch_username || localStorage.getItem('couch_username');
+  usernameInput.value = myUsername;
+  updateLobbyButtons();
+
+  if (!session.couch_username) {
+    chrome.storage.local.set({ couch_username: myUsername });
+  }
+
+  return session.couch_room || null;
+});
 let roomRequestPending = false;
 let roomLoadingTimer = null;
 
@@ -1272,23 +714,10 @@ leaveRoomBtn.addEventListener('click', () => {
 // Grab the new timestamp elements
 const timestampBtn = shadow.getElementById('timestamp-btn');
 
-// Helper to format seconds into M:SS or H:MM:SS
-function formatTimestamp(seconds) {
-  const totalSeconds = Math.floor(seconds);
-  const hours = Math.floor(totalSeconds / 3600);
-  const mins = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-  const secondsText = secs.toString().padStart(2, '0');
-
-  return hours > 0
-    ? `${hours}:${mins.toString().padStart(2, '0')}:${secondsText}`
-    : `${mins}:${secondsText}`;
-}
-
 // --- FEATURE: SHARE VIDEO TIMESTAMP ---
 timestampBtn.addEventListener('click', () => {
   const video = findVideoElement();
-  const timeString = formatTimestamp(video?.currentTime || 0);
+  const timeString = CouchShared.formatTimestamp(video?.currentTime || 0);
   const messageText = `⏱️ ${timeString}`;
 
   emitLocalChatMessage(messageText);
@@ -1364,4 +793,9 @@ socket.on('update-host', ({ newHost }) => {
 
 sessionReady.then((savedRoom) => {
   if (savedRoom) joinRoom(savedRoom);
+});
+}
+
+initializeCouch().catch((error) => {
+  console.error('Couch panel failed to initialize:', error);
 });
