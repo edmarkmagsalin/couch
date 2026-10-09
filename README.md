@@ -22,7 +22,11 @@ Enter the same username used by the Chrome extension and join the same room code
 
 The frontend saves the room, duration, playback state, and playhead locally, then restores them and reconnects to the last room after a refresh. Playback position is checkpointed while the page is open; a room's newer playback action takes precedence when available. Deploy the backend timestamp updates in `backend/server.js` to the API service so actions made while this page is closed can be identified as newer.
 
-The extension and remote page share the floating panel template and styles in `chrome-extension/panel.html` and `chrome-extension/panel.css`, plus emoji detection and timestamp formatting in `chrome-extension/couch-shared.js`. Render's build command copies these assets into the static publish directory. To prepare a local frontend preview, run `pnpm frontend:prepare` before serving `frontend/`.
+Drag the grip beneath the chat history to resize the expanded floating panel. The height is saved locally in the frontend and Chrome extension. Drag the panel near the top or bottom edge to snap it into place. To dock it on the left or right, drag more than half of its width past that screen edge; it will tuck behind a reveal tab.
+
+The extension and remote page share the floating panel template and styles in `chrome-extension/panel.html` and `chrome-extension/panel.css`, plus emoji detection and timestamp formatting in `chrome-extension/couch-shared.js`. Render's build command copies these assets into the static publish directory.
+
+To test the frontend locally, run `pnpm frontend:dev` and open `http://localhost:4173`. This prepares the shared assets and serves the static frontend; stop the server with `Ctrl+C`. Python 3 is required.
 
 ## Links
 

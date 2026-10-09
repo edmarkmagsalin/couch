@@ -6,6 +6,7 @@
   "scripts": {
     "backend": "node backend/server.js",
     "frontend:prepare": "node scripts/prepare-frontend.mjs",
+    "frontend:dev": "pnpm frontend:prepare && printf '\\nOpen the frontend at: http://localhost:4173\\n\\n' && python3 -m http.server 4173 --directory frontend",
     "package": "node --env-file-if-exists=.env scripts/package.mjs",
     "release": "node scripts/release.mjs",
     "test": "echo \"Error: no test specified\" && exit 1"

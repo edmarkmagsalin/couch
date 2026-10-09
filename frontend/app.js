@@ -19,6 +19,7 @@ async function initializeRemote() {
   const status = document.getElementById('connection-status');
   const compactView = shadow.getElementById('compact-view');
   const compactMessages = shadow.getElementById('compact-messages');
+  const chatResizeHandle = shadow.getElementById('chat-resize-handle');
   const viewToggleButton = shadow.getElementById('view-toggle-btn');
   const couchSection = shadow.querySelector('section');
   const chatContainer = shadow.getElementById('chat-container');
@@ -66,6 +67,15 @@ async function initializeRemote() {
   let dragOffsetX = 0;
   let dragOffsetY = 0;
   let blurTimer = null;
+
+  const chatResizer = CouchShared.createChatResizer(chatResizeHandle, hostContainer, {
+    initialHeight: 180,
+    onCommit: (height) => localStorage.setItem('couch_remote_chat_height', String(height))
+  });
+  const savedChatHeight = Number(localStorage.getItem('couch_remote_chat_height'));
+  if (Number.isFinite(savedChatHeight) && savedChatHeight > 0) {
+    chatResizer.setHeight(savedChatHeight);
+  }
 
   usernameInput.value = username;
   durationInput.value = localStorage.getItem('couch_remote_duration') || '';
@@ -354,16 +364,18 @@ async function initializeRemote() {
     }
 
     const rect = hostContainer.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
     const edgeGap = 12;
-    const atLeftEdge = rect.left <= edgeGap;
-    const atRightEdge = viewportWidth - rect.right <= edgeGap;
+    const pastLeftDockThreshold = rect.left + rect.width / 2 < 0;
+    const pastRightDockThreshold = rect.left + rect.width / 2 > viewportWidth;
     const nearestEdge = [
       { name: 'top', distance: rect.top },
       { name: 'left', distance: rect.left },
-      { name: 'right', distance: viewportWidth - rect.right }
+      { name: 'right', distance: viewportWidth - rect.right },
+      { name: 'bottom', distance: viewportHeight - rect.bottom }
     ].reduce((nearest, edge) => edge.distance < nearest.distance ? edge : nearest);
     const maxLeft = Math.max(edgeGap, viewportWidth - rect.width - edgeGap);
-    const maxTop = Math.max(edgeGap, window.innerHeight - rect.height - edgeGap);
+    const maxTop = Math.max(edgeGap, viewportHeight - rect.height - edgeGap);
     const left = Math.min(Math.max(rect.left, edgeGap), maxLeft);
     const top = Math.min(Math.max(rect.top, edgeGap), maxTop);
     hostContainer.style.right = 'auto';
@@ -374,11 +386,14 @@ async function initializeRemote() {
     } else if (nearestEdge.name === 'left') {
       hostContainer.style.left = `${edgeGap}px`;
       hostContainer.style.top = `${top}px`;
-      if (atLeftEdge) setDockedEdge('left');
+      if (pastLeftDockThreshold) setDockedEdge('left');
+    } else if (nearestEdge.name === 'bottom') {
+      hostContainer.style.left = `${left}px`;
+      hostContainer.style.top = `${viewportHeight - rect.height - edgeGap}px`;
     } else {
       hostContainer.style.left = `${viewportWidth - rect.width - edgeGap}px`;
       hostContainer.style.top = `${top}px`;
-      if (atRightEdge) setDockedEdge('right');
+      if (pastRightDockThreshold) setDockedEdge('right');
     }
   }
 

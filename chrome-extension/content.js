@@ -210,6 +210,7 @@ document.addEventListener('fullscreenchange', syncFullscreenHost);
 
 const compactView = shadow.getElementById('compact-view');
 const compactMessages = shadow.getElementById('compact-messages');
+const chatResizeHandle = shadow.getElementById('chat-resize-handle');
 const viewToggleBtn = shadow.getElementById('view-toggle-btn');
 const couchSection = shadow.querySelector('section');
 const edgeTab = shadow.getElementById('edge-tab');
@@ -221,6 +222,24 @@ function clearBlurOpacityTimer() {
   clearTimeout(blurOpacityTimer);
   blurOpacityTimer = null;
 }
+
+const chatResizer = CouchShared.createChatResizer(chatResizeHandle, hostContainer, {
+  initialHeight: 130,
+  onCommit: (height) => {
+    chrome.storage.local.set({ couch_chat_height: height }).catch((error) => {
+      console.error('Could not save Couch chat height:', error);
+    });
+  }
+});
+chrome.storage.local.get('couch_chat_height').then(({ couch_chat_height: savedHeight }) => {
+  if (Number.isFinite(savedHeight)) {
+    chatResizer.setHeight(savedHeight);
+  } else if (savedHeight !== undefined) {
+    console.warn('Saved Couch chat height is invalid; using the default height.');
+  }
+}).catch((error) => {
+  console.error('Could not restore Couch chat height:', error);
+});
 
 function showInteractiveOpacity() {
   clearBlurOpacityTimer();
@@ -376,12 +395,13 @@ function snapToEdge() {
   const rect = hostContainer.getBoundingClientRect();
   const viewportHeight = window.innerHeight;
   const edgeGap = 12;
-  const atLeftEdge = rect.left <= edgeGap;
-  const atRightEdge = viewportWidth - rect.right <= edgeGap;
+  const pastLeftDockThreshold = rect.left + rect.width / 2 < 0;
+  const pastRightDockThreshold = rect.left + rect.width / 2 > viewportWidth;
   const edges = [
     { name: 'top', distance: rect.top },
     { name: 'left', distance: rect.left },
-    { name: 'right', distance: viewportWidth - rect.right }
+    { name: 'right', distance: viewportWidth - rect.right },
+    { name: 'bottom', distance: viewportHeight - rect.bottom }
   ];
   const nearestEdge = edges.reduce((nearest, edge) => (
     edge.distance < nearest.distance ? edge : nearest
@@ -400,11 +420,14 @@ function snapToEdge() {
   } else if (nearestEdge.name === 'left') {
     hostContainer.style.left = `${edgeGap}px`;
     hostContainer.style.top = `${currentTop}px`;
-    if (atLeftEdge) setDockedEdge('left');
+    if (pastLeftDockThreshold) setDockedEdge('left');
+  } else if (nearestEdge.name === 'bottom') {
+    hostContainer.style.left = `${currentLeft}px`;
+    hostContainer.style.top = `${viewportHeight - rect.height - edgeGap}px`;
   } else {
     hostContainer.style.left = `${viewportWidth - rect.width - edgeGap}px`;
     hostContainer.style.top = `${currentTop}px`;
-    if (atRightEdge) setDockedEdge('right');
+    if (pastRightDockThreshold) setDockedEdge('right');
   }
 }
 
