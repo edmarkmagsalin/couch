@@ -99,6 +99,18 @@ async function initializeRemote() {
     return `${digits.slice(0, -4)}:${digits.slice(-4, -2)}:${digits.slice(-2)}`;
   }
 
+  function applyDurationFormatting(input) {
+    const caret = input.selectionStart ?? input.value.length;
+    const digitsBeforeCaret = input.value.slice(0, caret).replace(/\D/g, '').length;
+    const formatted = formatDurationDigits(input.value);
+    if (formatted !== input.value) {
+      input.value = formatted;
+      const nextCaret = getCaretAfterDigits(formatted, digitsBeforeCaret);
+      input.setSelectionRange(nextCaret, nextCaret);
+    }
+    return input.value;
+  }
+
   function getCaretAfterDigits(value, digitCount) {
     if (digitCount === 0) return 0;
     let seen = 0;
@@ -426,14 +438,7 @@ async function initializeRemote() {
     persistSession();
   });
   durationInput.addEventListener('input', () => {
-    const caret = durationInput.selectionStart ?? durationInput.value.length;
-    const digitsBeforeCaret = durationInput.value.slice(0, caret).replace(/\D/g, '').length;
-    const formatted = formatDurationDigits(durationInput.value);
-    if (formatted !== durationInput.value) {
-      durationInput.value = formatted;
-      const nextCaret = getCaretAfterDigits(formatted, digitsBeforeCaret);
-      durationInput.setSelectionRange(nextCaret, nextCaret);
-    }
+    applyDurationFormatting(durationInput);
     localStorage.setItem('couch_remote_duration', durationInput.value);
     persistSession();
   });
@@ -462,6 +467,7 @@ async function initializeRemote() {
     currentTimeInput.select();
   });
   currentTimeInput.addEventListener('input', () => {
+    applyDurationFormatting(currentTimeInput);
     currentTimeError.textContent = '';
   });
   currentTimeInput.addEventListener('keydown', (event) => {
