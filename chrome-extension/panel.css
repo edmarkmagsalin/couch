@@ -357,7 +357,7 @@
     #emoji-bar {
       display: flex;
       gap: 6px;
-      max-width: 190px;
+      max-width: 80%;
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
