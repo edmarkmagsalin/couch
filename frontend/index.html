@@ -11,39 +11,44 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div id="couch-root"></div>
   <main class="controller-shell">
-    <section class="controller-card" aria-labelledby="controller-title">
-      <div class="controller-heading">
-        <p class="controller-eyebrow">Couch remote</p>
-        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light mode">Light mode</button>
+    <div class="remote-layout">
+      <div class="panel-sandbox" role="region" aria-label="Couch chat panel">
+        <div id="couch-root"></div>
       </div>
-      <h1 id="controller-title">Playback controller</h1>
-      <p class="controller-description">Join the same Couch room as the Chrome extension, then set your video’s duration to control its shared timeline.</p>
+      <section class="controller-card" aria-labelledby="controller-title">
+        <div class="controller-heading">
+          <p class="controller-eyebrow">Couch remote</p>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light mode">Light mode</button>
+        </div>
+        <h1 id="controller-title">Playback controller</h1>
+        <p class="controller-description">Join the same Couch room as the Chrome extension, then set your video’s duration to control its shared timeline.</p>
 
-      <form id="remote-duration-form" class="duration-form">
-        <label for="remote-duration">Video duration</label>
-        <div class="duration-row">
-          <input id="remote-duration" type="text" inputmode="numeric" placeholder="1:32:12" aria-describedby="remote-duration-help remote-duration-error">
-          <button id="remote-duration-submit" type="submit">Set duration</button>
-        </div>
-        <p id="remote-duration-help">Enter H:MM:SS or M:SS. This controls the shared timeline; no video is hosted here.</p>
-        <p id="remote-duration-error" class="controller-error" role="alert"></p>
-      </form>
+        <form id="remote-duration-form" class="duration-form">
+          <label for="remote-duration">Video duration</label>
+          <div class="duration-row">
+            <input id="remote-duration" type="text" inputmode="numeric" placeholder="1:32:12" aria-describedby="remote-duration-help remote-duration-error">
+            <button id="remote-duration-submit" type="submit">Set duration</button>
+          </div>
+          <p id="remote-duration-help">Enter H:MM:SS or M:SS. This controls the shared timeline; no video is hosted here.</p>
+          <p id="remote-duration-error" class="controller-error" role="alert"></p>
+        </form>
 
-      <section id="remote-controller" class="transport-panel" aria-label="Playback controls" hidden>
-        <div class="time-readout">
-          <span id="remote-current-time">0:00</span>
-          <span id="remote-playback-status">Paused</span>
-          <span id="remote-total-duration">0:00</span>
-        </div>
-        <input id="remote-seek" type="range" min="0" value="0" step="0.1" aria-label="Seek playback" disabled>
-        <div class="transport-buttons">
-          <button id="remote-toggle-playback" type="button" disabled>Play</button>
-        </div>
+        <section id="remote-controller" class="transport-panel" aria-label="Playback controls" hidden>
+          <div class="time-readout">
+            <input id="remote-current-time" type="text" inputmode="numeric" value="0:00" aria-label="Current playback time. Enter M:SS or H:MM:SS and press Enter to seek." aria-describedby="remote-current-time-error" autocomplete="off">
+            <span id="remote-playback-status">Paused</span>
+            <span id="remote-total-duration">0:00</span>
+          </div>
+          <p id="remote-current-time-error" class="controller-error" role="alert"></p>
+          <input id="remote-seek" type="range" min="0" value="0" step="0.1" aria-label="Seek playback" disabled>
+          <div class="transport-buttons">
+            <button id="remote-toggle-playback" type="button" disabled>Play</button>
+          </div>
+        </section>
+        <p id="controller-hint" class="controller-hint">Set a duration to enable the timeline and playback controls.</p>
       </section>
-      <p id="controller-hint" class="controller-hint">Set a duration to enable the timeline and playback controls.</p>
-    </section>
+    </div>
   </main>
   <div id="connection-status" role="status" aria-live="polite">Connecting to Couch...</div>
 </body>

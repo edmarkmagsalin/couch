@@ -1,5 +1,6 @@
 const API_URL = 'https://couch-sl1x.onrender.com';
 const hostContainer = document.getElementById('couch-root');
+hostContainer.classList.add('embedded');
 const shadow = hostContainer.attachShadow({ mode: 'open' });
 const theme = localStorage.getItem('couch_remote_theme') === 'light' ? 'light' : 'dark';
 document.documentElement.dataset.theme = theme;
@@ -21,9 +22,7 @@ async function initializeRemote() {
   const compactMessages = shadow.getElementById('compact-messages');
   const chatResizeHandle = shadow.getElementById('chat-resize-handle');
   const viewToggleButton = shadow.getElementById('view-toggle-btn');
-  const couchSection = shadow.querySelector('section');
   const chatContainer = shadow.getElementById('chat-container');
-  const edgeTab = shadow.getElementById('edge-tab');
   const lobby = shadow.getElementById('lobby');
   const createRoomForm = shadow.getElementById('create-room-form');
   const usernameInput = shadow.getElementById('username-input');
@@ -47,7 +46,8 @@ async function initializeRemote() {
   const controller = document.getElementById('remote-controller');
   const controllerHint = document.getElementById('controller-hint');
   const seekSlider = document.getElementById('remote-seek');
-  const currentTimeLabel = document.getElementById('remote-current-time');
+  const currentTimeInput = document.getElementById('remote-current-time');
+  const currentTimeError = document.getElementById('remote-current-time-error');
   const playbackStatusLabel = document.getElementById('remote-playback-status');
   const totalDurationLabel = document.getElementById('remote-total-duration');
   const playbackToggle = document.getElementById('remote-toggle-playback');
@@ -61,12 +61,8 @@ async function initializeRemote() {
   let lastPlaybackEventAt = playback.updatedAt;
   let hasRestoredPlayback = false;
   let isSeeking = false;
+  let isEditingCurrentTime = false;
   let isCompactView = false;
-  let dockedEdge = null;
-  let dragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-  let blurTimer = null;
 
   const chatResizer = CouchShared.createChatResizer(chatResizeHandle, hostContainer, {
     initialHeight: 180,
@@ -82,7 +78,7 @@ async function initializeRemote() {
   timestampButton.title = 'Share current playback timestamp';
   applyTheme(theme);
 
-  function parseDuration(value) {
+  function parseDuration(value, { allowZero = false } = {}) {
     const parts = value.trim().split(':');
     if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) return null;
     const numbers = parts.map(Number);
@@ -93,7 +89,24 @@ async function initializeRemote() {
     const total = parts.length === 3
       ? numbers[0] * 3600 + minutes * 60 + seconds
       : minutes * 60 + seconds;
-    return Number.isSafeInteger(total) && total > 0 ? total : null;
+    return Number.isSafeInteger(total) && (allowZero ? total >= 0 : total > 0) ? total : null;
+  }
+
+  function formatDurationDigits(value) {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, -2)}:${digits.slice(-2)}`;
+    return `${digits.slice(0, -4)}:${digits.slice(-4, -2)}:${digits.slice(-2)}`;
+  }
+
+  function getCaretAfterDigits(value, digitCount) {
+    if (digitCount === 0) return 0;
+    let seen = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      if (/\d/.test(value[index])) seen += 1;
+      if (seen === digitCount) return index + 1;
+    }
+    return value.length;
   }
 
   const savedSessionValue = localStorage.getItem('couch_remote_session');
@@ -179,7 +192,7 @@ async function initializeRemote() {
   function renderTimeline() {
     if (!durationSeconds) return;
     const timestamp = currentTimestamp();
-    currentTimeLabel.textContent = formatTime(timestamp);
+    if (!isEditingCurrentTime && !isSeeking) currentTimeInput.value = formatTime(timestamp);
     playbackStatusLabel.textContent = playback.status === 'playing' ? 'Playing' : 'Paused';
     totalDurationLabel.textContent = formatTime(durationSeconds);
     playbackToggle.textContent = playback.status === 'playing' ? 'Pause' : 'Play';
@@ -200,6 +213,7 @@ async function initializeRemote() {
     chatInput.disabled = !connected || currentRoom === null;
     const canControl = connected && currentRoom !== null && durationSeconds > 0;
     seekSlider.disabled = !canControl;
+    currentTimeInput.disabled = !canControl;
     playbackToggle.disabled = !canControl;
     timestampButton.disabled = !canControl;
   }
@@ -347,113 +361,8 @@ async function initializeRemote() {
     status.dataset.state = state;
   }
 
-  function setDockedEdge(edge) {
-    dockedEdge = edge;
-    hostContainer.classList.toggle('docked-left', edge === 'left');
-    hostContainer.classList.toggle('docked-right', edge === 'right');
-    edgeTab.textContent = edge === 'left' ? '▶' : '◀';
-  }
-
-  function snapToEdge() {
-    const viewportWidth = document.documentElement.clientWidth;
-    if (dockedEdge) {
-      hostContainer.style.left = dockedEdge === 'left'
-        ? '12px'
-        : `${viewportWidth - hostContainer.offsetWidth - 12}px`;
-      return;
-    }
-
-    const rect = hostContainer.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const edgeGap = 12;
-    const pastLeftDockThreshold = rect.left + rect.width / 2 < 0;
-    const pastRightDockThreshold = rect.left + rect.width / 2 > viewportWidth;
-    const nearestEdge = [
-      { name: 'top', distance: rect.top },
-      { name: 'left', distance: rect.left },
-      { name: 'right', distance: viewportWidth - rect.right },
-      { name: 'bottom', distance: viewportHeight - rect.bottom }
-    ].reduce((nearest, edge) => edge.distance < nearest.distance ? edge : nearest);
-    const maxLeft = Math.max(edgeGap, viewportWidth - rect.width - edgeGap);
-    const maxTop = Math.max(edgeGap, viewportHeight - rect.height - edgeGap);
-    const left = Math.min(Math.max(rect.left, edgeGap), maxLeft);
-    const top = Math.min(Math.max(rect.top, edgeGap), maxTop);
-    hostContainer.style.right = 'auto';
-
-    if (nearestEdge.name === 'top') {
-      hostContainer.style.left = `${left}px`;
-      hostContainer.style.top = `${edgeGap}px`;
-    } else if (nearestEdge.name === 'left') {
-      hostContainer.style.left = `${edgeGap}px`;
-      hostContainer.style.top = `${top}px`;
-      if (pastLeftDockThreshold) setDockedEdge('left');
-    } else if (nearestEdge.name === 'bottom') {
-      hostContainer.style.left = `${left}px`;
-      hostContainer.style.top = `${viewportHeight - rect.height - edgeGap}px`;
-    } else {
-      hostContainer.style.left = `${viewportWidth - rect.width - edgeGap}px`;
-      hostContainer.style.top = `${top}px`;
-      if (pastRightDockThreshold) setDockedEdge('right');
-    }
-  }
-
-  function scheduleBlur() {
-    clearTimeout(blurTimer);
-    blurTimer = setTimeout(() => {
-      if (!hostContainer.matches(':hover') && !shadow.activeElement) {
-        couchSection.classList.add('blurred');
-        edgeTab.classList.add('blurred');
-      }
-    }, 3000);
-  }
-
-  hostContainer.addEventListener('mouseenter', () => {
-    clearTimeout(blurTimer);
-    couchSection.classList.remove('blurred');
-    edgeTab.classList.remove('blurred');
-  });
-  hostContainer.addEventListener('mouseleave', scheduleBlur);
-  shadow.addEventListener('focus', () => {
-    hostContainer.classList.add('is-focused');
-    clearTimeout(blurTimer);
-    couchSection.classList.remove('blurred');
-    edgeTab.classList.remove('blurred');
-  }, true);
-  shadow.addEventListener('blur', () => {
-    setTimeout(() => {
-      if (!shadow.activeElement) {
-        hostContainer.classList.remove('is-focused');
-        scheduleBlur();
-      }
-    }, 0);
-  }, true);
-  shadow.getElementById('drag-handle').addEventListener('mousedown', (event) => {
-    dragging = true;
-    const rect = hostContainer.getBoundingClientRect();
-    dragOffsetX = event.clientX - rect.left;
-    dragOffsetY = event.clientY - rect.top;
-  });
-  viewToggleButton.addEventListener('mousedown', (event) => event.stopPropagation());
   viewToggleButton.addEventListener('click', () => isCompactView ? showFullView() : showCompactView());
   compactView.addEventListener('click', showFullView);
-  edgeTab.addEventListener('mousedown', (event) => event.stopPropagation());
-  edgeTab.addEventListener('click', () => {
-    setDockedEdge(null);
-    if (currentRoom && !isCompactView) requestAnimationFrame(() => chatInput.focus());
-  });
-  document.addEventListener('mousemove', (event) => {
-    if (!dragging) return;
-    hostContainer.style.right = 'auto';
-    hostContainer.style.bottom = 'auto';
-    hostContainer.style.left = `${event.clientX - dragOffsetX}px`;
-    hostContainer.style.top = `${event.clientY - dragOffsetY}px`;
-  });
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
-    snapToEdge();
-  });
-  window.addEventListener('resize', snapToEdge);
 
   usernameInput.addEventListener('input', updateButtons);
   joinRoomInput.addEventListener('input', updateButtons);
@@ -517,6 +426,14 @@ async function initializeRemote() {
     persistSession();
   });
   durationInput.addEventListener('input', () => {
+    const caret = durationInput.selectionStart ?? durationInput.value.length;
+    const digitsBeforeCaret = durationInput.value.slice(0, caret).replace(/\D/g, '').length;
+    const formatted = formatDurationDigits(durationInput.value);
+    if (formatted !== durationInput.value) {
+      durationInput.value = formatted;
+      const nextCaret = getCaretAfterDigits(formatted, digitsBeforeCaret);
+      durationInput.setSelectionRange(nextCaret, nextCaret);
+    }
     localStorage.setItem('couch_remote_duration', durationInput.value);
     persistSession();
   });
@@ -531,13 +448,53 @@ async function initializeRemote() {
   });
   seekSlider.addEventListener('input', () => {
     isSeeking = true;
-    currentTimeLabel.textContent = formatTime(Number(seekSlider.value));
+    if (!isEditingCurrentTime) currentTimeInput.value = formatTime(Number(seekSlider.value));
   });
   seekSlider.addEventListener('change', () => {
     const timestamp = Number(seekSlider.value);
     isSeeking = false;
     setPlayback(playback.status, timestamp);
     emitVideoAction('seek', timestamp);
+  });
+  currentTimeInput.addEventListener('focus', () => {
+    isEditingCurrentTime = true;
+    currentTimeInput.value = formatTime(currentTimestamp());
+    currentTimeInput.select();
+  });
+  currentTimeInput.addEventListener('input', () => {
+    currentTimeError.textContent = '';
+  });
+  currentTimeInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const timestamp = parseDuration(currentTimeInput.value, { allowZero: true });
+      if (timestamp === null) {
+        currentTimeError.textContent = 'Enter a time in M:SS or H:MM:SS format.';
+        return;
+      }
+      if (timestamp > durationSeconds) {
+        currentTimeError.textContent = `Enter a time at or before ${formatTime(durationSeconds)}.`;
+        return;
+      }
+
+      currentTimeError.textContent = '';
+      isEditingCurrentTime = false;
+      setPlayback(playback.status, timestamp);
+      emitVideoAction('seek', timestamp);
+      currentTimeInput.blur();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      isEditingCurrentTime = false;
+      currentTimeError.textContent = '';
+      renderTimeline();
+      currentTimeInput.blur();
+    }
+  });
+  currentTimeInput.addEventListener('blur', () => {
+    if (!isEditingCurrentTime) return;
+    isEditingCurrentTime = false;
+    currentTimeError.textContent = '';
+    renderTimeline();
   });
 
   socket.on('connect', () => {
@@ -605,7 +562,6 @@ async function initializeRemote() {
 
   updateViewToggle();
   showCompactView();
-  scheduleBlur();
   setInterval(renderTimeline, 250);
   setInterval(persistSession, 1000);
   window.addEventListener('pagehide', persistSession);

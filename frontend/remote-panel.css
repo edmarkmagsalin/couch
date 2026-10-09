@@ -2,6 +2,20 @@
   --couch-chat-height: 180px;
 }
 
+:host(.embedded) {
+  transform: none;
+  transition: none;
+}
+
+:host(.embedded) #edge-tab {
+  display: none;
+}
+
+:host(.embedded) header,
+:host(.embedded) header:active {
+  cursor: default;
+}
+
 #lobby.remote-expanded,
 #chat-container.remote-expanded {
   display: flex !important;

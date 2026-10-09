@@ -55,25 +55,41 @@ body {
 }
 
 .controller-shell {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-height: 100vh;
   min-height: 100svh;
   padding: 32px;
-  place-items: center;
 }
 
+.remote-layout {
+  display: grid;
+  gap: 20px;
+  width: min(680px, 100%);
+  margin-block: auto;
+}
+
+.panel-sandbox,
 .controller-card {
   position: relative;
   overflow: hidden;
-  width: min(680px, 100%);
-  padding: clamp(24px, 4vw, 42px);
+  width: 100%;
   border: 1px solid var(--card-line);
   border-radius: 22px;
   background: linear-gradient(180deg, var(--card-top), var(--card-bottom));
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
   color: var(--text);
   font-family: Inter, "Segoe UI", sans-serif;
+}
+
+.controller-card {
+  padding: clamp(24px, 4vw, 42px);
+}
+
+.panel-sandbox {
+  padding: clamp(14px, 2.4vw, 22px);
 }
 
 .controller-heading {
@@ -83,6 +99,7 @@ body {
   gap: 16px;
 }
 
+.panel-sandbox::before,
 .controller-card::before {
   position: absolute;
   inset: 0 0 auto;
@@ -232,6 +249,29 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+#remote-current-time {
+  width: 8ch;
+  min-width: 5ch;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+#remote-current-time:focus {
+  outline: 2px solid rgba(229, 9, 20, 0.75);
+  outline-offset: 3px;
+}
+
+#remote-current-time-error {
+  margin: -4px 0 12px;
+  font-size: 0.8rem;
+}
+
 #remote-playback-status {
   color: var(--muted);
   font-size: 0.78rem;
@@ -265,12 +305,9 @@ body {
 }
 
 #couch-root {
-  position: fixed;
-  z-index: 9999999;
-  top: 20px;
-  right: 20px;
+  position: relative;
   display: block;
-  width: 250px;
+  width: 100%;
 }
 
 #connection-status {
@@ -296,9 +333,14 @@ body {
 
 @media (max-width: 480px) {
   .controller-shell {
+    align-items: flex-start;
     min-height: 100vh;
     min-height: 100svh;
-    padding: 84px 12px 60px;
+    padding: 32px 12px 60px;
+  }
+
+  .remote-layout {
+    margin-block: 0;
   }
 
   .duration-row {
@@ -306,9 +348,7 @@ body {
     flex-direction: column;
   }
 
-  #couch-root {
-    top: 12px;
-    right: 12px;
-    width: min(250px, calc(100vw - 24px));
+  .panel-sandbox {
+    padding: 12px;
   }
 }
