@@ -197,6 +197,15 @@
       text-shadow: 0 2px 12px rgb(0 0 0 / 35%);
     }
 
+    .brand-version {
+      color: rgb(255 255 255 / 60%);
+      -webkit-text-fill-color: rgb(255 255 255 / 60%);
+      font-size: 8px;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-shadow: none;
+    }
+
     .brand-icon {
       display: block;
       width: 28px;

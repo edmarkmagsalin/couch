@@ -6,6 +6,9 @@ let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
 let currentHost = null; // Track current room host
 let isCompactView = true;
+let chatHistoryClearedAt = 0;
+let joiningRoomId = null;
+const chatHistoryClearedAtByRoom = {};
 
 // Helper to generate a random 6-character room code (e.g., "x7b9kq")
 function generateRoomCode() {
@@ -73,6 +76,15 @@ function announceMediaChange(video) {
   });
 }
 
+function announceVideoVolume(video = findVideoElement()) {
+  if (!currentRoom) return;
+  socket.emit('video-volume-state', {
+    roomId: currentRoom,
+    available: Boolean(video),
+    volume: video ? (video.muted ? 0 : video.volume) : null
+  });
+}
+
 function applyVideoTime(video, timestamp) {
   isRemoteUpdate = true;
   if (Math.abs(video.currentTime - timestamp) > 0.5) {
@@ -98,6 +110,7 @@ function hookVideo(video) {
   if (!video || video === hookedVideo) return;
   hookedVideo = video;
   console.log('Watch Party: Video element found and hooked!');
+  announceVideoVolume(video);
 
   function announceVideoAction(action) {
     socket.emit('video-action', {
@@ -133,6 +146,7 @@ function hookVideo(video) {
   });
 
   video.addEventListener('loadedmetadata', () => announceMediaChange(video));
+  video.addEventListener('volumechange', () => announceVideoVolume(video));
   video.addEventListener('emptied', () => { lastAnnouncedMediaKey = null; });
 
   if (video.readyState >= 1) announceMediaChange(video);
@@ -181,6 +195,19 @@ socket.on('seek-video', (data) => {
   setPendingVideoState('seeking', data.timestamp);
 });
 
+socket.on('request-video-volume', () => announceVideoVolume());
+socket.on('set-video-volume', ({ volume }) => {
+  if (!Number.isFinite(volume) || volume < 0 || volume > 1) return;
+  const video = findVideoElement();
+  if (!video) {
+    announceVideoVolume(null);
+    return;
+  }
+  video.volume = volume;
+  video.muted = volume === 0;
+  announceVideoVolume(video);
+});
+
 
 // 3. UI Injection (Draggable + Semantic HTML)
 const hostContainer = document.createElement('div');
@@ -194,7 +221,9 @@ const shadow = hostContainer.attachShadow({ mode: 'open' });
 const panelResponse = await fetch(chrome.runtime.getURL('panel.html'));
 if (!panelResponse.ok) throw new Error(`Panel template request failed: ${panelResponse.status}`);
 const panelMarkup = await panelResponse.text();
-shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('panel.css')}">${panelMarkup.replaceAll('__COUCH_LOGO_URL__', chrome.runtime.getURL('assets/couch.svg'))}`;
+shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('panel.css')}">${panelMarkup
+  .replaceAll('__COUCH_LOGO_URL__', chrome.runtime.getURL('assets/couch.svg'))
+  .replaceAll('__COUCH_VERSION__', chrome.runtime.getManifest().version)}`;
 document.body.appendChild(hostContainer);
 
 function syncFullscreenHost() {
@@ -508,9 +537,10 @@ function createSenderLabel(sender, isHost) {
   return wrapper;
 }
 
-function appendMessage(sender, text) {
+function appendMessage(sender, text, time = Date.now()) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
+  rowDiv.dataset.messageTime = String(time);
 
   const messageContent = document.createElement('span');
   messageContent.className = 'message-content';
@@ -582,8 +612,15 @@ const createRoomBtn = shadow.getElementById('create-room-btn');
 const createRoomForm = shadow.getElementById('create-room-form');
 const displayHostName = shadow.getElementById('display-host-name');
 
-const sessionReady = chrome.storage.local.get(['couch_username', 'couch_room']).then((session) => {
+const sessionReady = chrome.storage.local.get([
+  'couch_username',
+  'couch_room',
+  'couch_chat_history_cleared_at'
+]).then((session) => {
   myUsername = session.couch_username || localStorage.getItem('couch_username');
+  if (session.couch_chat_history_cleared_at && typeof session.couch_chat_history_cleared_at === 'object') {
+    Object.assign(chatHistoryClearedAtByRoom, session.couch_chat_history_cleared_at);
+  }
   usernameInput.value = myUsername;
   updateLobbyButtons();
 
@@ -650,6 +687,7 @@ function captureAndSaveUsername() {
 
 function showRoom(roomId) {
   currentRoom = roomId;
+  joiningRoomId = null;
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
   chatContainer.style.display = isCompactView ? 'none' : 'flex';
@@ -657,15 +695,18 @@ function showRoom(roomId) {
   if (hookedVideo?.readyState >= 1) {
     announceMediaChange(hookedVideo);
   }
+  announceVideoVolume();
 }
 
 function joinRoom(roomId, action = 'join') {
   if (roomRequestPending) return;
 
+  joiningRoomId = roomId;
+  chatHistoryClearedAt = Number(chatHistoryClearedAtByRoom[roomId]) || 0;
   setRoomRequestPending(true);
   joinError.textContent = '';
 
-  socket.emit('join-room', { roomId, username: myUsername, action }, (response) => {
+  socket.emit('join-room', { roomId, username: myUsername, action, clientType: 'extension' }, (response) => {
     setRoomRequestPending(false);
 
     if (response.success) {
@@ -675,6 +716,7 @@ function joinRoom(roomId, action = 'join') {
       return;
     }
 
+    joiningRoomId = null;
     if (action === 'join') {
       joinError.textContent = response.message;
     }
@@ -716,6 +758,36 @@ joinRoomForm.addEventListener('submit', (event) => {
 });
 
 const leaveRoomBtn = shadow.getElementById('leave-room-btn');
+const clearChatButton = shadow.getElementById('clear-chat-btn');
+
+function renderSyncedChatHistory(history) {
+  history
+    .filter(isVisibleAfterChatClear)
+    .forEach((message) => appendMessage(message.sender, message.text, message.time));
+}
+
+function isVisibleAfterChatClear(message) {
+  const time = Number(message.time);
+  return chatHistoryClearedAt === 0 || (Number.isFinite(time) && time > chatHistoryClearedAt);
+}
+
+function clearOwnChatHistory() {
+  if (!currentRoom) return;
+  const latestMessageTime = [...messageList.children].reduce((latest, message) => {
+    const time = Number(message.dataset.messageTime);
+    return Number.isFinite(time) ? Math.max(latest, time) : latest;
+  }, chatHistoryClearedAt);
+  chatHistoryClearedAt = latestMessageTime;
+  chatHistoryClearedAtByRoom[currentRoom] = chatHistoryClearedAt;
+  chrome.storage.local.set({
+    couch_chat_history_cleared_at: chatHistoryClearedAtByRoom
+  }).catch((error) => {
+    console.error('Could not save the cleared chat history marker:', error);
+  });
+  clearChatHistory();
+}
+
+clearChatButton.addEventListener('click', clearOwnChatHistory);
 
 // --- FEATURE 3: LEAVING A ROOM ---
 leaveRoomBtn.addEventListener('click', () => {
@@ -784,7 +856,8 @@ chatForm.addEventListener('submit', (event) => {
 });
 
 socket.on('new-message', (data) => {
-  appendMessage(data.sender, data.text);
+  if (!isVisibleAfterChatClear(data)) return;
+  appendMessage(data.sender, data.text, data.time);
   highlightNewMessage();
 });
 socket.on('sync-room', (state) => {
@@ -802,7 +875,9 @@ socket.on('sync-room', (state) => {
   }
 
   clearChatHistory();
-  state.chatHistory.forEach((msg) => appendMessage(msg.sender, msg.text));
+  const roomId = joiningRoomId || currentRoom;
+  if (roomId) chatHistoryClearedAt = Number(chatHistoryClearedAtByRoom[roomId]) || 0;
+  renderSyncedChatHistory(state.chatHistory);
 });
 
 socket.on('update-host', ({ newHost }) => {

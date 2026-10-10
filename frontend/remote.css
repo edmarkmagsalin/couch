@@ -219,6 +219,49 @@ body {
   font-size: 0.84rem;
 }
 
+.volume-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--transport-bg);
+}
+
+.volume-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+#remote-volume-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+#remote-volume {
+  width: 100%;
+  margin: 0;
+  accent-color: #e50914;
+  cursor: pointer;
+}
+
+#remote-volume:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.volume-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .controller-error {
   min-height: 1.2em;
   color: #ff858b !important;
@@ -346,6 +389,11 @@ body {
   .duration-row {
     align-items: stretch;
     flex-direction: column;
+    gap: 12px;
+  }
+
+  .duration-row button {
+    min-height: 48px;
   }
 
   .panel-sandbox {

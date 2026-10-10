@@ -3,6 +3,7 @@
       <span class="brand-label">
         <img class="brand-icon" src="__COUCH_LOGO_URL__" alt="couch" draggable="false">
         <span>couch</span>
+        <span class="brand-version">v__COUCH_VERSION__</span>
       </span>
       <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
     </header>
@@ -32,6 +33,7 @@
     <div id="chat-container">
       <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: inherit;">
         <button id="display-room-id" class="btn small" type="button" title="Copy room code" aria-label="Copy room code">...</button>
+        <button id="clear-chat-btn" class="btn small secondary" type="button" title="Clear chat history on this device" aria-label="Clear chat history on this device">Clear</button>
         <button id="leave-room-btn" class="btn small secondary">Exit</button>
       </div>
       <main><ul id="messages"></ul></main>

@@ -25,7 +25,7 @@ io.on('connection', (socket) => {
 
 
   // --- JOIN ROOM EVENT ---
-  socket.on('join-room', ({ roomId, username, action }, callback) => {
+  socket.on('join-room', ({ roomId, username, action, clientType }, callback) => {
     if (action === 'join' && !roomStates[roomId]) {
       if (typeof callback === 'function') {
         callback({ success: false, message: 'Room does not exist!' });
@@ -58,7 +58,11 @@ io.on('connection', (socket) => {
     const userExists = roomStates[roomId].users.some(u => u.socketId === socket.id);
 
     if (!userExists) {
-      roomStates[roomId].users.push({ socketId: socket.id, username });
+      roomStates[roomId].users.push({
+        socketId: socket.id,
+        username,
+        clientType: clientType === 'remote' ? 'remote' : 'extension'
+      });
       
       const systemMessage = { sender: 'System', text: `${username} joined the party.`, time: Date.now() };
       roomStates[roomId].chatHistory.push(systemMessage);
@@ -70,7 +74,21 @@ io.on('connection', (socket) => {
       socket.to(roomId).emit('new-message', systemMessage);
     } else {
       // If already joined, just re-sync state without adding a duplicate system message
+      const participant = roomStates[roomId].users.find(user => user.socketId === socket.id);
+      participant.clientType = clientType === 'remote' ? 'remote' : 'extension';
       socket.emit('sync-room', roomStates[roomId]);
+    }
+
+    const participant = roomStates[roomId].users.find(user => user.socketId === socket.id);
+    if (participant.clientType === 'remote') {
+      const extensions = roomStates[roomId].users.filter(user => (
+        user.clientType === 'extension' && user.username === participant.username
+      ));
+      if (extensions.length === 0) {
+        socket.emit('video-volume-state', { available: false, volume: null });
+      } else {
+        extensions.forEach(user => io.to(user.socketId).emit('request-video-volume'));
+      }
     }
 
     if (typeof callback === 'function') {
@@ -140,6 +158,35 @@ io.on('connection', (socket) => {
     socket.leave(roomId);
     console.log(`${username} (${socket.id}) left room ${roomId}`);
     removeUserAndReassignHost(roomId, socket.id);
+  });
+
+  socket.on('video-volume-state', ({ roomId, available, volume }) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    if (!room || participant?.clientType !== 'extension' || typeof available !== 'boolean') return;
+    if (available && (!Number.isFinite(volume) || volume < 0 || volume > 1)) return;
+
+    room.users
+      .filter(user => user.clientType === 'remote' && user.username === participant.username)
+      .forEach(user => io.to(user.socketId).emit('video-volume-state', {
+        available,
+        volume: available ? volume : null
+      }));
+  });
+
+  socket.on('set-video-volume', ({ roomId, volume }, callback) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    if (!room || participant?.clientType !== 'remote' || !Number.isFinite(volume) || volume < 0 || volume > 1) {
+      if (typeof callback === 'function') callback({ success: false });
+      return;
+    }
+
+    const targets = room.users.filter(user => (
+      user.clientType === 'extension' && user.username === participant.username
+    ));
+    targets.forEach(user => io.to(user.socketId).emit('set-video-volume', { volume }));
+    if (typeof callback === 'function') callback({ success: targets.length > 0 });
   });
 
   // --- VIDEO EVENTS ---

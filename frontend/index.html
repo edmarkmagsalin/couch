@@ -22,17 +22,26 @@
           <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light mode">Light mode</button>
         </div>
         <h1 id="controller-title">Playback controller</h1>
-        <p class="controller-description">Join the same Couch room as the Chrome extension, then set your video’s duration to control its shared timeline.</p>
+        <p class="controller-description">Join the same Couch room with the same username as the Chrome extension to control playback and adjust your video’s volume.</p>
 
         <form id="remote-duration-form" class="duration-form">
           <label for="remote-duration">Video duration</label>
           <div class="duration-row">
-            <input id="remote-duration" type="text" inputmode="numeric" placeholder="1:32:12" aria-describedby="remote-duration-help remote-duration-error">
+            <input id="remote-duration" type="text" inputmode="text" enterkeyhint="done" placeholder="1:32:12" aria-describedby="remote-duration-help remote-duration-error">
             <button id="remote-duration-submit" type="submit">Set duration</button>
           </div>
-          <p id="remote-duration-help">Enter H:MM:SS or M:SS. This controls the shared timeline; no video is hosted here.</p>
+          <p id="remote-duration-help">Enter H:MM:SS or M:SS, then tap Set duration to apply. This controls the shared timeline; no video is hosted here.</p>
           <p id="remote-duration-error" class="controller-error" role="alert"></p>
         </form>
+
+        <section class="volume-panel" aria-label="Personal video volume">
+          <div class="volume-heading">
+            <label for="remote-volume">Your video volume</label>
+            <output id="remote-volume-value" for="remote-volume">100%</output>
+          </div>
+          <input id="remote-volume" type="range" min="0" max="1" value="1" step="0.01" aria-label="Your video volume" disabled>
+          <p id="remote-volume-status" class="volume-status" role="status" aria-live="polite">Join a room with the same username as Couch on your video to adjust its volume.</p>
+        </section>
 
         <section id="remote-controller" class="transport-panel" aria-label="Playback controls" hidden>
           <div class="time-readout">

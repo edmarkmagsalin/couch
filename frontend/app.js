@@ -1,4 +1,5 @@
 const API_URL = 'https://couch-sl1x.onrender.com';
+// const API_URL = 'http://localhost:3000';
 const hostContainer = document.getElementById('couch-root');
 hostContainer.classList.add('embedded');
 const shadow = hostContainer.attachShadow({ mode: 'open' });
@@ -33,6 +34,7 @@ async function initializeRemote() {
   const joinError = shadow.getElementById('join-error');
   const roomLoading = shadow.getElementById('room-loading-message');
   const displayRoomId = shadow.getElementById('display-room-id');
+  const clearChatButton = shadow.getElementById('clear-chat-btn');
   const leaveRoomButton = shadow.getElementById('leave-room-btn');
   const messageList = shadow.getElementById('messages');
   const chatForm = shadow.getElementById('chat-form');
@@ -51,10 +53,14 @@ async function initializeRemote() {
   const playbackStatusLabel = document.getElementById('remote-playback-status');
   const totalDurationLabel = document.getElementById('remote-total-duration');
   const playbackToggle = document.getElementById('remote-toggle-playback');
+  const volumeSlider = document.getElementById('remote-volume');
+  const volumeValue = document.getElementById('remote-volume-value');
+  const volumeStatus = document.getElementById('remote-volume-status');
   const themeColor = document.querySelector('meta[name="theme-color"]');
 
   let username = localStorage.getItem('couch_username') || '';
   let currentRoom = null;
+  let isRoomJoined = false;
   let currentHost = null;
   let durationSeconds = 0;
   let playback = { status: 'paused', timestamp: 0, updatedAt: Date.now() };
@@ -63,6 +69,10 @@ async function initializeRemote() {
   let isSeeking = false;
   let isEditingCurrentTime = false;
   let isCompactView = false;
+  let hasRemoteVideo = false;
+  let hasReceivedVolumeState = false;
+  let chatHistoryClearedAt = 0;
+  let joiningRoomId = null;
 
   const chatResizer = CouchShared.createChatResizer(chatResizeHandle, hostContainer, {
     initialHeight: 180,
@@ -165,7 +175,9 @@ async function initializeRemote() {
   const formatTime = CouchShared.formatTimestamp;
 
   function currentTimestamp() {
-    const elapsed = playback.status === 'playing' ? (Date.now() - playback.updatedAt) / 1000 : 0;
+    const elapsed = isRoomJoined && playback.status === 'playing'
+      ? (Date.now() - playback.updatedAt) / 1000
+      : 0;
     return Math.min(durationSeconds || Number.MAX_SAFE_INTEGER, Math.max(0, playback.timestamp + elapsed));
   }
 
@@ -182,7 +194,7 @@ async function initializeRemote() {
   }
 
   function emitVideoAction(action, timestamp) {
-    if (!currentRoom || !socket.connected) return;
+    if (!currentRoom || !isRoomJoined || !socket.connected) return;
     const eventName = action === 'play' ? 'play-video' : action === 'pause' ? 'pause-video' : 'seek-video';
     const time = Math.max(0, Number(timestamp) || 0);
     socket.emit(eventName, { roomId: currentRoom, timestamp: time }, (result) => {
@@ -205,13 +217,14 @@ async function initializeRemote() {
     if (!durationSeconds) return;
     const timestamp = currentTimestamp();
     if (!isEditingCurrentTime && !isSeeking) currentTimeInput.value = formatTime(timestamp);
-    playbackStatusLabel.textContent = playback.status === 'playing' ? 'Playing' : 'Paused';
+    const isPlaying = isRoomJoined && playback.status === 'playing';
+    playbackStatusLabel.textContent = isPlaying ? 'Playing' : 'Paused';
     totalDurationLabel.textContent = formatTime(durationSeconds);
-    playbackToggle.textContent = playback.status === 'playing' ? 'Pause' : 'Play';
-    playbackToggle.classList.toggle('is-secondary', playback.status === 'playing');
-    playbackToggle.setAttribute('aria-label', playback.status === 'playing' ? 'Pause playback' : 'Start playback');
+    playbackToggle.textContent = isPlaying ? 'Pause' : 'Play';
+    playbackToggle.classList.toggle('is-secondary', isPlaying);
+    playbackToggle.setAttribute('aria-label', isPlaying ? 'Pause playback' : 'Start playback');
     if (!isSeeking) seekSlider.value = String(Math.min(timestamp, durationSeconds));
-    if (timestamp >= durationSeconds && playback.status === 'playing') {
+    if (timestamp >= durationSeconds && isPlaying) {
       setPlayback('paused', durationSeconds);
       emitVideoAction('pause', durationSeconds);
     }
@@ -222,12 +235,20 @@ async function initializeRemote() {
     const hasUsername = usernameInput.value.trim().length > 0;
     createRoomButton.disabled = !connected || !hasUsername;
     joinRoomButton.disabled = !connected || !hasUsername || !joinRoomInput.value.trim();
-    chatInput.disabled = !connected || currentRoom === null;
-    const canControl = connected && currentRoom !== null && durationSeconds > 0;
+    chatInput.disabled = !connected || !isRoomJoined || currentRoom === null;
+    const canControl = connected && isRoomJoined && currentRoom !== null && durationSeconds > 0;
     seekSlider.disabled = !canControl;
     currentTimeInput.disabled = !canControl;
     playbackToggle.disabled = !canControl;
     timestampButton.disabled = !canControl;
+    volumeSlider.disabled = !connected || !isRoomJoined || currentRoom === null || !hasRemoteVideo;
+    if (!connected || !isRoomJoined || currentRoom === null) {
+      volumeStatus.textContent = 'Join a room with the same username as Couch on your video to adjust its volume.';
+    } else if (!hasReceivedVolumeState) {
+      volumeStatus.textContent = 'Waiting for Couch to find a video using the same username.';
+    } else if (!hasRemoteVideo) {
+      volumeStatus.textContent = 'No video found in Couch. Open a video using the same username.';
+    }
   }
 
   function applyTheme(nextTheme) {
@@ -242,6 +263,7 @@ async function initializeRemote() {
   function addMessage(message) {
     const row = document.createElement('li');
     row.className = 'message-row';
+    row.dataset.messageTime = String(Number.isFinite(message.time) ? message.time : Date.now());
     const isSystem = message.sender === 'System';
     const isOwnMessage = message.sender === 'You' || message.sender === username;
     row.classList.add(isSystem ? 'system' : isOwnMessage ? 'right' : 'left');
@@ -313,6 +335,9 @@ async function initializeRemote() {
 
   function showRoom(roomId) {
     currentRoom = roomId;
+    isRoomJoined = true;
+    joiningRoomId = null;
+    chatHistoryClearedAt = Number(localStorage.getItem(`couch_chat_cleared_${roomId}`)) || 0;
     persistSession();
     displayRoomId.textContent = roomId;
     lobby.classList.remove('remote-expanded');
@@ -324,8 +349,13 @@ async function initializeRemote() {
   }
 
   function showLobby() {
+    const timestamp = currentTimestamp();
+    isRoomJoined = false;
     currentRoom = null;
     currentHost = null;
+    joiningRoomId = null;
+    hasRemoteVideo = false;
+    setPlayback('paused', timestamp);
     persistSession();
     messageList.replaceChildren();
     compactMessages.replaceChildren();
@@ -341,18 +371,25 @@ async function initializeRemote() {
   function submitRoomRequest(roomId, action) {
     username = usernameInput.value.trim();
     if (!username || !socket.connected) return;
+    hasRemoteVideo = false;
+    hasReceivedVolumeState = false;
+    joiningRoomId = roomId;
+    chatHistoryClearedAt = Number(localStorage.getItem(`couch_chat_cleared_${roomId}`)) || 0;
+    updateButtons();
     localStorage.setItem('couch_username', username);
     joinError.textContent = '';
     roomLoading.textContent = 'Connecting...';
     createRoomButton.disabled = true;
     joinRoomButton.disabled = true;
-    socket.timeout(10000).emit('join-room', { roomId, username, action }, (error, result) => {
+    socket.timeout(10000).emit('join-room', { roomId, username, action, clientType: 'remote' }, (error, result) => {
       updateButtons();
       if (error) {
+        joiningRoomId = null;
         joinError.textContent = 'The server did not respond. Please try again.';
         return;
       }
       if (!result?.success) {
+        joiningRoomId = null;
         joinError.textContent = result?.message || 'Could not join this room.';
         return;
       }
@@ -363,9 +400,26 @@ async function initializeRemote() {
 
   function sendChat(text) {
     const message = text.trim();
-    if (!message || !currentRoom || !socket.connected) return;
+    if (!message || !currentRoom || !isRoomJoined || !socket.connected) return;
     addMessage({ sender: 'You', text: message, time: Date.now() });
     socket.emit('send-message', { roomId: currentRoom, username, text: message });
+  }
+
+  function clearOwnChatHistory() {
+    if (!currentRoom) return;
+    const latestMessageTime = [...messageList.children].reduce((latest, message) => {
+      const time = Number(message.dataset.messageTime);
+      return Number.isFinite(time) ? Math.max(latest, time) : latest;
+    }, chatHistoryClearedAt);
+    chatHistoryClearedAt = latestMessageTime;
+    localStorage.setItem(`couch_chat_cleared_${currentRoom}`, String(chatHistoryClearedAt));
+    messageList.replaceChildren();
+    compactMessages.replaceChildren();
+  }
+
+  function isVisibleAfterChatClear(message) {
+    return chatHistoryClearedAt === 0
+      || (Number.isFinite(message.time) && message.time > chatHistoryClearedAt);
   }
 
   function setConnection(message, state) {
@@ -375,6 +429,7 @@ async function initializeRemote() {
 
   viewToggleButton.addEventListener('click', () => isCompactView ? showFullView() : showCompactView());
   compactView.addEventListener('click', showFullView);
+  clearChatButton.addEventListener('click', clearOwnChatHistory);
 
   usernameInput.addEventListener('input', updateButtons);
   joinRoomInput.addEventListener('input', updateButtons);
@@ -451,6 +506,21 @@ async function initializeRemote() {
     setPlayback(nextStatus, timestamp);
     emitVideoAction(nextStatus === 'playing' ? 'play' : 'pause', timestamp);
   });
+  volumeSlider.addEventListener('input', () => {
+    const volume = Number(volumeSlider.value);
+    volumeValue.value = `${Math.round(volume * 100)}%`;
+    volumeStatus.textContent = 'Applying volume...';
+    socket.emit('set-video-volume', { roomId: currentRoom, volume }, (result) => {
+      if (!result?.success) {
+        hasRemoteVideo = false;
+        hasReceivedVolumeState = true;
+        volumeStatus.textContent = 'No matching video is connected. Open a video in Couch using the same username.';
+        updateButtons();
+      } else {
+        volumeStatus.textContent = 'Volume applies only to your video.';
+      }
+    });
+  });
   seekSlider.addEventListener('input', () => {
     isSeeking = true;
     if (!isEditingCurrentTime) currentTimeInput.value = formatTime(Number(seekSlider.value));
@@ -514,8 +584,11 @@ async function initializeRemote() {
         showLobby();
         return;
       }
-      socket.timeout(10000).emit('join-room', { roomId, username, action: 'join' }, (error, result) => {
+      joiningRoomId = roomId;
+      chatHistoryClearedAt = Number(localStorage.getItem(`couch_chat_cleared_${roomId}`)) || 0;
+      socket.timeout(10000).emit('join-room', { roomId, username, action: 'join', clientType: 'remote' }, (error, result) => {
         if (error || !result?.success) {
+          joiningRoomId = null;
           joinRoomInput.value = roomId;
           joinError.textContent = error
             ? 'The server did not respond while reconnecting. Please try again.'
@@ -529,6 +602,11 @@ async function initializeRemote() {
     }
   });
   socket.on('disconnect', () => {
+    const timestamp = currentTimestamp();
+    isRoomJoined = false;
+    hasRemoteVideo = false;
+    hasReceivedVolumeState = false;
+    setPlayback('paused', timestamp);
     setConnection('Disconnected — reconnecting...', 'offline');
     updateButtons();
   });
@@ -537,6 +615,9 @@ async function initializeRemote() {
     updateButtons();
   });
   socket.on('sync-room', (state) => {
+    if (socket.connected && (joiningRoomId || currentRoom)) {
+      isRoomJoined = true;
+    }
     currentHost = state.host || currentHost;
     if (state.video) {
       const serverActionAt = Number(state.video.updatedAt);
@@ -549,13 +630,33 @@ async function initializeRemote() {
     hasRestoredPlayback = false;
     messageList.replaceChildren();
     compactMessages.replaceChildren();
-    for (const message of state.chatHistory || []) addMessage(message);
+    const roomId = joiningRoomId || currentRoom;
+    if (roomId) {
+      chatHistoryClearedAt = Number(localStorage.getItem(`couch_chat_cleared_${roomId}`)) || 0;
+    }
+    for (const message of state.chatHistory || []) {
+      if (isVisibleAfterChatClear(message)) addMessage(message);
+    }
   });
-  socket.on('new-message', addMessage);
+  socket.on('new-message', (message) => {
+    if (isVisibleAfterChatClear(message)) addMessage(message);
+  });
   socket.on('play-video', ({ timestamp, updatedAt }) => setPlayback('playing', timestamp, updatedAt));
   socket.on('pause-video', ({ timestamp, updatedAt }) => setPlayback('paused', timestamp, updatedAt));
   socket.on('seek-video', ({ timestamp, updatedAt }) => setPlayback(playback.status, timestamp, updatedAt));
   socket.on('update-host', ({ newHost }) => { currentHost = newHost; });
+  socket.on('video-volume-state', ({ available, volume }) => {
+    hasReceivedVolumeState = true;
+    hasRemoteVideo = available === true && Number.isFinite(volume);
+    if (hasRemoteVideo) {
+      volumeSlider.value = String(Math.min(1, Math.max(0, volume)));
+      volumeValue.value = `${Math.round(Number(volumeSlider.value) * 100)}%`;
+      volumeStatus.textContent = 'Volume applies only to your video.';
+    } else {
+      volumeStatus.textContent = 'No video found in Couch. Open a video using the same username.';
+    }
+    updateButtons();
+  });
 
   const savedDuration = durationSeconds || parseDuration(durationInput.value);
   if (savedDuration) {
