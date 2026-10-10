@@ -255,6 +255,37 @@ body {
   opacity: 0.48;
 }
 
+.volume-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.volume-presets button {
+  flex: 1 0 54px;
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.volume-presets button:not(:disabled):hover,
+.volume-presets button[aria-pressed="true"] {
+  border-color: rgba(229, 9, 20, 0.75);
+  background: rgba(229, 9, 20, 0.12);
+}
+
+.volume-presets button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .volume-status {
   margin: 0;
   color: var(--muted);

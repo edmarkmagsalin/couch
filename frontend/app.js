@@ -55,6 +55,7 @@ async function initializeRemote() {
   const playbackToggle = document.getElementById('remote-toggle-playback');
   const volumeSlider = document.getElementById('remote-volume');
   const volumeValue = document.getElementById('remote-volume-value');
+  const volumePresets = document.getElementById('remote-volume-presets');
   const volumeStatus = document.getElementById('remote-volume-status');
   const themeColor = document.querySelector('meta[name="theme-color"]');
 
@@ -242,6 +243,9 @@ async function initializeRemote() {
     playbackToggle.disabled = !canControl;
     timestampButton.disabled = !canControl;
     volumeSlider.disabled = !connected || !isRoomJoined || currentRoom === null || !hasRemoteVideo;
+    for (const button of volumePresets.querySelectorAll('button')) {
+      button.disabled = volumeSlider.disabled;
+    }
     if (!connected || !isRoomJoined || currentRoom === null) {
       volumeStatus.textContent = 'Join a room with the same username as Couch on your video to adjust its volume.';
     } else if (!hasReceivedVolumeState) {
@@ -422,6 +426,26 @@ async function initializeRemote() {
       || (Number.isFinite(message.time) && message.time > chatHistoryClearedAt);
   }
 
+  function setVolume(volume) {
+    volumeSlider.value = String(volume);
+    const selectedVolume = Number(volumeSlider.value);
+    volumeValue.value = `${Math.round(selectedVolume * 100)}%`;
+    for (const button of volumePresets.querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.volume) === selectedVolume));
+    }
+    volumeStatus.textContent = 'Applying volume...';
+    socket.emit('set-video-volume', { roomId: currentRoom, volume: selectedVolume }, (result) => {
+      if (!result?.success) {
+        hasRemoteVideo = false;
+        hasReceivedVolumeState = true;
+        volumeStatus.textContent = 'No matching video is connected. Open a video in Couch using the same username.';
+        updateButtons();
+      } else {
+        volumeStatus.textContent = 'Volume applies only to your video.';
+      }
+    });
+  }
+
   function setConnection(message, state) {
     status.textContent = message;
     status.dataset.state = state;
@@ -506,20 +530,10 @@ async function initializeRemote() {
     setPlayback(nextStatus, timestamp);
     emitVideoAction(nextStatus === 'playing' ? 'play' : 'pause', timestamp);
   });
-  volumeSlider.addEventListener('input', () => {
-    const volume = Number(volumeSlider.value);
-    volumeValue.value = `${Math.round(volume * 100)}%`;
-    volumeStatus.textContent = 'Applying volume...';
-    socket.emit('set-video-volume', { roomId: currentRoom, volume }, (result) => {
-      if (!result?.success) {
-        hasRemoteVideo = false;
-        hasReceivedVolumeState = true;
-        volumeStatus.textContent = 'No matching video is connected. Open a video in Couch using the same username.';
-        updateButtons();
-      } else {
-        volumeStatus.textContent = 'Volume applies only to your video.';
-      }
-    });
+  volumeSlider.addEventListener('input', () => setVolume(Number(volumeSlider.value)));
+  volumePresets.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-volume]');
+    if (button && !button.disabled) setVolume(Number(button.dataset.volume));
   });
   seekSlider.addEventListener('input', () => {
     isSeeking = true;
@@ -651,6 +665,9 @@ async function initializeRemote() {
     if (hasRemoteVideo) {
       volumeSlider.value = String(Math.min(1, Math.max(0, volume)));
       volumeValue.value = `${Math.round(Number(volumeSlider.value) * 100)}%`;
+      for (const button of volumePresets.querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(Number(button.dataset.volume) === Number(volumeSlider.value)));
+      }
       volumeStatus.textContent = 'Volume applies only to your video.';
     } else {
       volumeStatus.textContent = 'No video found in Couch. Open a video using the same username.';

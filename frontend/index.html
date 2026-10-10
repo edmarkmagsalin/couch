@@ -40,6 +40,14 @@
             <output id="remote-volume-value" for="remote-volume">100%</output>
           </div>
           <input id="remote-volume" type="range" min="0" max="1" value="1" step="0.01" aria-label="Your video volume" disabled>
+          <div id="remote-volume-presets" class="volume-presets" role="group" aria-label="Preset video volume levels">
+            <button type="button" data-volume="0.05" disabled>5%</button>
+            <button type="button" data-volume="0.15" disabled>15%</button>
+            <button type="button" data-volume="0.25" disabled>25%</button>
+            <button type="button" data-volume="0.5" disabled>50%</button>
+            <button type="button" data-volume="0.75" disabled>75%</button>
+            <button type="button" data-volume="1" disabled>100%</button>
+          </div>
           <p id="remote-volume-status" class="volume-status" role="status" aria-live="polite">Join a room with the same username as Couch on your video to adjust its volume.</p>
         </section>
 
