@@ -1,8 +1,8 @@
 # Backlog
 
 ## Features to implement
- - slash commands in chat to set frontend video durtion
  - slash commands in chat to seek
+ - close room control, host only?
 
 
 ## Bugs to fix
