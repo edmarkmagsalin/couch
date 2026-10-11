@@ -30,3 +30,9 @@
 #connection-status {
   color: #aeb4bb;
 }
+
+@media (max-width: 600px) {
+  :host(.embedded) input[type="text"] {
+    font-size: 16px;
+  }
+}
