@@ -5,7 +5,7 @@
         <span>couch</span>
         <span class="brand-version">v__COUCH_VERSION__</span>
       </span>
-      <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch">▼</button>
+      <button id="view-toggle-btn" class="view-toggle-btn" type="button" title="Expand Couch" aria-label="Expand Couch"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g transform="rotate(180 12 12)"><path d="M12 19V5m-7 7 7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></button>
     </header>
 
     <!-- LOBBY VIEW -->
@@ -13,7 +13,8 @@
       <!-- UPDATED: Username section without a separate button -->
       <form id="create-room-form" class="flex-column">
         <input type="text" id="username-input" placeholder="Username" autocomplete="off"/>
-        <button type="submit" id="create-room-btn" class="btn">Create New Room</button>
+        <button type="submit" hidden></button>
+        <button type="button" id="create-room-btn" class="btn">Create New Room</button>
       </form>
 
       <hr width="100%" border="1" class="muted">
@@ -87,4 +88,4 @@
       <div id="compact-messages"></div>
     </div>
   </section>
-  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch">◀</button>
+  <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g transform="rotate(270 12 12)"><path d="M12 19V5m-7 7 7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></button>

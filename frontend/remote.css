@@ -337,6 +337,46 @@ body {
   opacity: 0.48;
 }
 
+.sync-playback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.sync-playback button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sync-playback button:not(:disabled):hover {
+  border-color: rgba(229, 9, 20, 0.75);
+  background: rgba(229, 9, 20, 0.12);
+}
+
+.sync-playback button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.sync-playback p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
 .transport-buttons {
   justify-content: center;
   margin-top: 16px;

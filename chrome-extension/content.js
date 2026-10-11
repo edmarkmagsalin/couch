@@ -196,6 +196,21 @@ socket.on('seek-video', (data) => {
 });
 
 socket.on('request-video-volume', () => announceVideoVolume());
+socket.on('request-playback-state', ({ roomId }, callback) => {
+  if (roomId !== currentRoom || typeof callback !== 'function') return;
+
+  const video = findVideoElement();
+  if (!video || video.readyState < HTMLMediaElement.HAVE_METADATA || !Number.isFinite(video.currentTime)) {
+    callback({ available: false });
+    return;
+  }
+
+  callback({
+    available: true,
+    status: video.paused ? 'paused' : 'playing',
+    timestamp: video.currentTime
+  });
+});
 socket.on('set-video-volume', ({ volume }) => {
   if (!Number.isFinite(volume) || volume < 0 || volume > 1) return;
   const video = findVideoElement();
@@ -315,7 +330,7 @@ function highlightNewMessage() {
 
 function updateViewToggleButton() {
   const action = isCompactView ? 'Expand' : 'Collapse';
-  viewToggleBtn.textContent = isCompactView ? '▼' : '▲';
+  CouchShared.setArrowIcon(viewToggleBtn, isCompactView ? 'down' : 'up');
   viewToggleBtn.title = `${action} Couch`;
   viewToggleBtn.setAttribute('aria-label', `${action} Couch`);
 }
@@ -382,7 +397,7 @@ function setDockedEdge(edge) {
   dockedEdge = edge;
   hostContainer.classList.toggle('docked-left', edge === 'left');
   hostContainer.classList.toggle('docked-right', edge === 'right');
-  edgeTab.textContent = edge === 'left' ? '▶' : '◀';
+  CouchShared.setArrowIcon(edgeTab, edge === 'left' ? 'right' : 'left');
   edgeTab.title = 'Show Couch';
   edgeTab.setAttribute('aria-label', 'Show Couch');
 }
@@ -666,6 +681,22 @@ function setRoomRequestPending(isPending) {
 
 usernameInput.addEventListener('input', updateLobbyButtons);
 joinRoomInput.addEventListener('input', updateLobbyButtons);
+function submitRoomFromInputs() {
+  if (!usernameInput.value.trim()) return;
+
+  const roomCode = joinRoomInput.value.trim();
+  if (roomCode) {
+    captureAndSaveUsername();
+    joinRoom(roomCode);
+  } else {
+    createRoom();
+  }
+}
+
+createRoomForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  submitRoomFromInputs();
+});
 
 const emojiBar = shadow.getElementById('emoji-bar');
 
@@ -737,16 +768,7 @@ function createRoom() {
   joinRoom(newCode, 'create');
 }
 
-createRoomForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-
-  if (joinRoomInput.value.trim()) {
-    joinRoomForm.requestSubmit();
-    return;
-  }
-
-  createRoom();
-});
+createRoomBtn.addEventListener('click', createRoom);
 
 joinRoomForm.addEventListener('submit', (event) => {
   event.preventDefault();

@@ -58,20 +58,23 @@ io.on('connection', (socket) => {
     const userExists = roomStates[roomId].users.some(u => u.socketId === socket.id);
 
     if (!userExists) {
+      const participantType = clientType === 'remote' ? 'remote' : 'extension';
       roomStates[roomId].users.push({
         socketId: socket.id,
         username,
-        clientType: clientType === 'remote' ? 'remote' : 'extension'
+        clientType: participantType
       });
       
-      const systemMessage = { sender: 'System', text: `${username} joined the party.`, time: Date.now() };
-      roomStates[roomId].chatHistory.push(systemMessage);
-      
+      const joinMessage = participantType === 'extension'
+        ? { sender: 'System', text: `${username} joined the party.`, time: Date.now() }
+        : null;
+      if (joinMessage) roomStates[roomId].chatHistory.push(joinMessage);
+
       // Send current room state to the joining user
       socket.emit('sync-room', roomStates[roomId]);
 
       // Broadcast the join message ONLY to other existing members in the room
-      socket.to(roomId).emit('new-message', systemMessage);
+      if (joinMessage) socket.to(roomId).emit('new-message', joinMessage);
     } else {
       // If already joined, just re-sync state without adding a duplicate system message
       const participant = roomStates[roomId].users.find(user => user.socketId === socket.id);
@@ -131,24 +134,28 @@ io.on('connection', (socket) => {
       room.hostSocketId = newHostUser.socketId;
       room.host = newHostUser.username;
       
-      const systemMessage = { 
-        sender: 'System', 
-        text: `${departingUser.username} left. ${room.host} is now the room host.`, 
-        time: Date.now() 
-      };
-      room.chatHistory.push(systemMessage);
-      io.in(roomId).emit('new-message', systemMessage);
+      if (departingUser.clientType !== 'remote') {
+        const systemMessage = {
+          sender: 'System',
+          text: `${departingUser.username} left. ${room.host} is now the room host.`,
+          time: Date.now()
+        };
+        room.chatHistory.push(systemMessage);
+        io.in(roomId).emit('new-message', systemMessage);
+      }
       
       // Broadcast the correct new host to all remaining clients
       io.in(roomId).emit('update-host', { newHost: room.host });
     } else {
-      const systemMessage = { 
-        sender: 'System', 
-        text: `${departingUser.username} left the party.`, 
-        time: Date.now() 
-      };
-      room.chatHistory.push(systemMessage);
-      io.in(roomId).emit('new-message', systemMessage);
+      if (departingUser.clientType !== 'remote') {
+        const systemMessage = {
+          sender: 'System',
+          text: `${departingUser.username} left the party.`,
+          time: Date.now()
+        };
+        room.chatHistory.push(systemMessage);
+        io.in(roomId).emit('new-message', systemMessage);
+      }
     }
   }
 
@@ -187,6 +194,50 @@ io.on('connection', (socket) => {
     ));
     targets.forEach(user => io.to(user.socketId).emit('set-video-volume', { volume }));
     if (typeof callback === 'function') callback({ success: targets.length > 0 });
+  });
+
+  socket.on('request-playback-state', ({ roomId }, callback) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    if (!room || participant?.clientType !== 'remote') {
+      if (typeof callback === 'function') callback({ success: false, message: 'Join a room before syncing playback.' });
+      return;
+    }
+
+    const extensions = room.users.filter(user => (
+      user.clientType === 'extension' && user.username === participant.username
+    ));
+    if (extensions.length === 0) {
+      if (typeof callback === 'function') callback({ success: false, message: 'No matching Couch extension is connected.' });
+      return;
+    }
+
+    io.to(extensions.map(user => user.socketId)).timeout(5000).emit(
+      'request-playback-state',
+      { roomId },
+      (error, responses = []) => {
+        const state = responses.find(response => (
+          response?.available === true
+          && ['playing', 'paused'].includes(response.status)
+          && Number.isFinite(response.timestamp)
+          && response.timestamp >= 0
+        ));
+
+        if (state) {
+          if (typeof callback === 'function') callback({
+            success: true,
+            state: { status: state.status, timestamp: state.timestamp }
+          });
+        } else if (typeof callback === 'function') {
+          callback({
+            success: false,
+            message: error
+              ? 'The extension did not respond. Make sure Couch is open and try again.'
+              : 'No video is available in the matching Couch extension.'
+          });
+        }
+      }
+    );
   });
 
   // --- VIDEO EVENTS ---
@@ -292,6 +343,9 @@ io.on('connection', (socket) => {
     // socket.rooms contains all rooms this socket was a part of
     socket.rooms.forEach((roomId) => {
       if (roomId !== socket.id && roomStates[roomId]) {
+        const participant = roomStates[roomId].users.find(user => user.socketId === socket.id);
+        if (participant?.clientType === 'remote') return;
+
         // Announce to remaining users that someone dropped off
         const systemMessage = { sender: 'System', text: `A user disconnected.`, time: Date.now() };
         roomStates[roomId].chatHistory.push(systemMessage);

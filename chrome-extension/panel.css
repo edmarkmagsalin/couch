@@ -229,8 +229,22 @@
       line-height: 1;
     }
 
+    .view-toggle-btn svg {
+      display: block;
+      width: 12px;
+      height: 12px;
+      transform: translateX(3px);
+    }
+
     .view-toggle-btn:hover {
       background: rgb(0 0 0 / 30%);
+    }
+
+    #edge-tab svg {
+      display: block;
+      width: 18px;
+      height: 18px;
+      margin: auto;
     }
 
     :host(.docked-left) #edge-tab,

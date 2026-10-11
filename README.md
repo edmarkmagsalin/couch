@@ -18,7 +18,7 @@ This project is a lightweight browser-based watch-party tool for shared viewing 
 
 The `frontend/` directory is a static web app that connects to the Couch API at `https://couch-sl1x.onrender.com`. It can be deployed to Render as a Static Site using the included `render.yaml` Blueprint.
 
-Enter the same username used by the Chrome extension and join the same room code to see its chat and control its playback. Set the duration to the source video's length (for example, `1:32:12`) to enable the remote timeline, play, pause, and seek controls. Edit the current-time readout and press Enter to jump to a specific time; use `M:SS` or `H:MM:SS` within the configured duration. This page controls synchronized playback but does not host or play the source video.
+Enter the same username used by the Chrome extension and join the same room code to see its chat and control its playback. Use **Sync from extension** to update the remote's displayed playback position from the current video in the matching extension. Edit the current-time readout and press Enter to jump to a specific time; use `M:SS` or `H:MM:SS`. This page controls synchronized playback but does not host or play the source video.
 
 The frontend saves the room, duration, playback state, and playhead locally, then restores them and reconnects to the last room after a refresh. Playback position is checkpointed while the page is open; a room's newer playback action takes precedence when available. Deploy the backend timestamp updates in `backend/server.js` to the API service so actions made while this page is closed can be identified as newer.
 

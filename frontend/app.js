@@ -29,7 +29,6 @@ async function initializeRemote() {
   const viewToggleButton = shadow.getElementById('view-toggle-btn');
   const chatContainer = shadow.getElementById('chat-container');
   const lobby = shadow.getElementById('lobby');
-  const createRoomForm = shadow.getElementById('create-room-form');
   const usernameInput = shadow.getElementById('username-input');
   const createRoomButton = shadow.getElementById('create-room-btn');
   const joinRoomForm = shadow.getElementById('join-room-form');
@@ -53,6 +52,8 @@ async function initializeRemote() {
   const currentTimeError = document.getElementById('remote-current-time-error');
   const playbackStatusLabel = document.getElementById('remote-playback-status');
   const playbackToggle = document.getElementById('remote-toggle-playback');
+  const syncPlaybackButton = document.getElementById('remote-sync-playback');
+  const syncPlaybackStatus = document.getElementById('remote-sync-status');
   const volumeSlider = document.getElementById('remote-volume');
   const volumeValue = document.getElementById('remote-volume-value');
   const volumePresets = document.getElementById('remote-volume-presets');
@@ -69,6 +70,8 @@ async function initializeRemote() {
   let isEditingCurrentTime = false;
   let isCompactView = false;
   let hasRemoteVideo = false;
+  let isSyncingPlayback = false;
+  let playbackSyncRequestId = 0;
   let hasReceivedVolumeState = false;
   let chatHistoryClearedAt = 0;
   let joiningRoomId = null;
@@ -232,6 +235,7 @@ async function initializeRemote() {
     }
     currentTimeInput.disabled = !canControl;
     playbackToggle.disabled = !canControl;
+    syncPlaybackButton.disabled = !canControl || isSyncingPlayback;
     timestampButton.disabled = !canControl;
     controllerHint.hidden = canControl;
     controllerHint.textContent = connected
@@ -304,7 +308,7 @@ async function initializeRemote() {
 
   function updateViewToggle() {
     const label = isCompactView ? 'Expand' : 'Collapse';
-    viewToggleButton.textContent = isCompactView ? '▼' : '▲';
+    CouchShared.setArrowIcon(viewToggleButton, isCompactView ? 'down' : 'up');
     viewToggleButton.title = `${label} Couch`;
     viewToggleButton.setAttribute('aria-label', `${label} Couch`);
   }
@@ -349,6 +353,8 @@ async function initializeRemote() {
 
   function showLobby() {
     const timestamp = currentTimestamp();
+    playbackSyncRequestId += 1;
+    isSyncingPlayback = false;
     isRoomJoined = false;
     currentRoom = null;
     currentHost = null;
@@ -452,11 +458,26 @@ async function initializeRemote() {
 
   usernameInput.addEventListener('input', updateButtons);
   joinRoomInput.addEventListener('input', updateButtons);
-  createRoomForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (joinRoomInput.value.trim()) {
-      submitRoomRequest(joinRoomInput.value.trim().toLowerCase(), 'join');
+  function submitRoomFromInputs() {
+    if (!usernameInput.value.trim()) return;
+
+    const roomCode = joinRoomInput.value.trim().toLowerCase();
+    if (roomCode) {
+      submitRoomRequest(roomCode, 'join');
     } else {
+      submitRoomRequest(Math.random().toString(36).substring(2, 8), 'create');
+    }
+  }
+  function handleRoomInputEnter(event) {
+    if (event.key !== 'Enter') return;
+
+    event.preventDefault();
+    submitRoomFromInputs();
+  }
+  usernameInput.addEventListener('keydown', handleRoomInputEnter);
+  joinRoomInput.addEventListener('keydown', handleRoomInputEnter);
+  createRoomButton.addEventListener('click', () => {
+    if (!createRoomButton.disabled) {
       submitRoomRequest(Math.random().toString(36).substring(2, 8), 'create');
     }
   });
@@ -501,6 +522,34 @@ async function initializeRemote() {
     const nextStatus = playback.status === 'playing' ? 'paused' : 'playing';
     setPlayback(nextStatus, timestamp);
     emitVideoAction(nextStatus === 'playing' ? 'play' : 'pause', timestamp);
+  });
+  syncPlaybackButton.addEventListener('click', () => {
+    if (!currentRoom || !isRoomJoined || !socket.connected || isSyncingPlayback) return;
+
+    const roomId = currentRoom;
+    const requestId = ++playbackSyncRequestId;
+    isSyncingPlayback = true;
+    syncPlaybackStatus.textContent = 'Requesting current video time from the extension…';
+    updateButtons();
+    socket.timeout(6000).emit('request-playback-state', { roomId }, (error, result) => {
+      if (requestId !== playbackSyncRequestId || roomId !== currentRoom) return;
+
+      isSyncingPlayback = false;
+      updateButtons();
+
+      if (error) {
+        syncPlaybackStatus.textContent = 'The extension did not respond. Make sure Couch is open and try again.';
+        return;
+      }
+      if (!result?.success) {
+        syncPlaybackStatus.textContent = result?.message || 'Could not sync from the extension.';
+        return;
+      }
+
+      setPlayback(result.state.status, result.state.timestamp);
+      const stateLabel = result.state.status === 'playing' ? 'playing' : 'paused';
+      syncPlaybackStatus.textContent = `Synced to ${formatTime(result.state.timestamp)} (${stateLabel}).`;
+    });
   });
   volumeSlider.addEventListener('input', () => setVolume(Number(volumeSlider.value)));
   volumePresets.addEventListener('click', (event) => {

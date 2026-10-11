@@ -24,6 +24,30 @@ function formatTimestamp(seconds) {
     : `${minutes}:${secondsText}`;
 }
 
+function setArrowIcon(button, direction) {
+  const rotations = { up: 0, right: 90, down: 180, left: 270 };
+  const rotation = rotations[direction];
+  if (rotation === undefined) throw new RangeError(`Unsupported arrow direction: ${direction}`);
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+
+  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  group.setAttribute('transform', `rotate(${rotation} 12 12)`);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M12 19V5m-7 7 7-7 7 7');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '2');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  group.append(path);
+  svg.append(group);
+  button.replaceChildren(svg);
+}
+
 function createChatResizer(handle, host, { initialHeight, onCommit = () => {} } = {}) {
   const minimumHeight = 70;
   const maximumHeight = () => Math.max(minimumHeight, Math.min(480, window.innerHeight - 220));
@@ -93,4 +117,4 @@ function createChatResizer(handle, host, { initialHeight, onCommit = () => {} } 
   };
 }
 
-globalThis.CouchShared = Object.freeze({ isSingleEmoji, formatTimestamp, createChatResizer });
+globalThis.CouchShared = Object.freeze({ isSingleEmoji, formatTimestamp, setArrowIcon, createChatResizer });

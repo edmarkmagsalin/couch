@@ -54,6 +54,10 @@
             <button type="button" data-seek-offset="30" aria-label="Seek forward 30 seconds" disabled>+30s</button>
             <button type="button" data-seek-offset="60" aria-label="Seek forward 60 seconds" disabled>+60s</button>
           </div>
+          <div class="sync-playback">
+            <button id="remote-sync-playback" class="is-secondary" type="button" disabled>Sync from extension</button>
+            <p id="remote-sync-status" role="status" aria-live="polite">Update the displayed time from the extension’s current video.</p>
+          </div>
           <div class="transport-buttons">
             <button id="remote-toggle-playback" type="button" disabled>Play</button>
             <button id="remote-reset-time" class="is-secondary" type="button" aria-label="Reset current time to 0:00">Reset</button>
