@@ -281,6 +281,7 @@ body {
 #remote-current-time {
   width: 8ch;
   min-width: 5ch;
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
   border-radius: 3px;
@@ -406,7 +407,8 @@ body {
   position: fixed;
   z-index: 1;
   bottom: 14px;
-  left: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   padding: 7px 11px;
   border: 1px solid var(--card-line);
   border-radius: 999px;

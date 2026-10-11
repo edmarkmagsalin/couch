@@ -40,19 +40,15 @@
 
         <section id="remote-controller" class="transport-panel" aria-label="Playback controls">
           <div class="time-readout">
-            <input id="remote-current-time" type="text" inputmode="numeric" enterkeyhint="done" value="0:00" aria-label="Current playback time. Enter M:SS or H:MM:SS and press Enter to seek." aria-describedby="remote-current-time-error" autocomplete="off">
+            <input id="remote-current-time" type="text" inputmode="text" enterkeyhint="go" value="0:00" aria-label="Current playback time. Enter M:SS or H:MM:SS and submit to seek." aria-describedby="remote-current-time-error" autocomplete="off">
             <span id="remote-playback-status">Paused</span>
           </div>
           <p id="remote-current-time-error" class="controller-error" role="alert"></p>
           <div id="remote-seek-buttons" class="seek-buttons" role="group" aria-label="Seek playback">
-            <button type="button" data-seek-offset="-60" aria-label="Seek back 60 seconds" disabled>-60s</button>
-            <button type="button" data-seek-offset="-30" aria-label="Seek back 30 seconds" disabled>-30s</button>
             <button type="button" data-seek-offset="-15" aria-label="Seek back 15 seconds" disabled>-15s</button>
             <button type="button" data-seek-offset="-5" aria-label="Seek back 5 seconds" disabled>-5s</button>
             <button type="button" data-seek-offset="5" aria-label="Seek forward 5 seconds" disabled>+5s</button>
             <button type="button" data-seek-offset="15" aria-label="Seek forward 15 seconds" disabled>+15s</button>
-            <button type="button" data-seek-offset="30" aria-label="Seek forward 30 seconds" disabled>+30s</button>
-            <button type="button" data-seek-offset="60" aria-label="Seek forward 60 seconds" disabled>+60s</button>
           </div>
           <div class="sync-playback">
             <button id="remote-sync-playback" class="is-secondary" type="button" disabled>Sync from extension</button>

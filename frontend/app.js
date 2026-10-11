@@ -223,6 +223,17 @@ async function initializeRemote() {
     emitVideoAction('seek', timestamp);
   }
 
+  function submitCurrentTime(value = currentTimeInput.value) {
+    const timestamp = parseTime(value);
+    if (timestamp === null) {
+      currentTimeError.textContent = 'Enter a time in M:SS or H:MM:SS format.';
+      return;
+    }
+
+    seekTo(timestamp);
+    currentTimeInput.blur();
+  }
+
   function updateButtons() {
     const connected = socket.connected;
     const hasUsername = usernameInput.value.trim().length > 0;
@@ -575,17 +586,7 @@ async function initializeRemote() {
   currentTimeInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      const timestamp = parseTime(currentTimeInput.value);
-      if (timestamp === null) {
-        currentTimeError.textContent = 'Enter a time in M:SS or H:MM:SS format.';
-        return;
-      }
-
-      currentTimeError.textContent = '';
-      isEditingCurrentTime = false;
-      setPlayback(playback.status, timestamp);
-      emitVideoAction('seek', timestamp);
-      currentTimeInput.blur();
+      submitCurrentTime();
     } else if (event.key === 'Escape') {
       event.preventDefault();
       isEditingCurrentTime = false;
