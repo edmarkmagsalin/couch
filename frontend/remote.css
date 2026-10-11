@@ -142,7 +142,6 @@ body {
 }
 
 .controller-description,
-.duration-form > p,
 .controller-hint {
   color: var(--muted);
   line-height: 1.6;
@@ -153,40 +152,6 @@ body {
   margin: 0 0 28px;
 }
 
-.duration-form {
-  display: grid;
-  gap: 10px;
-}
-
-.duration-form label {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.duration-row {
-  display: flex;
-  gap: 10px;
-}
-
-.duration-row input {
-  flex: 1;
-  min-width: 0;
-  min-height: 46px;
-  padding: 10px 13px;
-  border: 1px solid var(--input-line);
-  border-radius: 10px;
-  outline: none;
-  background: var(--input-bg);
-  color: var(--text);
-  font: inherit;
-}
-
-.duration-row input:focus {
-  border-color: rgba(229, 9, 20, 0.75);
-  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.12);
-}
-
-.duration-row button,
 .transport-buttons button {
   min-height: 42px;
   padding: 9px 17px;
@@ -199,7 +164,6 @@ body {
   cursor: pointer;
 }
 
-.duration-row button:hover,
 .transport-buttons button:hover {
   filter: brightness(1.1);
 }
@@ -212,11 +176,6 @@ body {
 
 .transport-buttons button.is-secondary:hover {
   filter: brightness(1.2);
-}
-
-.duration-form > p {
-  margin: 0;
-  font-size: 0.84rem;
 }
 
 .volume-panel {
@@ -306,10 +265,6 @@ body {
   background: var(--transport-bg);
 }
 
-.transport-panel[hidden] {
-  display: none;
-}
-
 .time-readout,
 .transport-buttons {
   display: flex;
@@ -353,10 +308,33 @@ body {
   text-transform: uppercase;
 }
 
-#remote-seek {
-  width: 100%;
-  accent-color: #e50914;
+.seek-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.seek-buttons button {
+  min-height: 40px;
+  padding: 8px;
+  border: 1px solid var(--card-line);
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 650;
   cursor: pointer;
+}
+
+.seek-buttons button:not(:disabled):hover {
+  border-color: rgba(229, 9, 20, 0.75);
+  background: rgba(229, 9, 20, 0.12);
+}
+
+.seek-buttons button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .transport-buttons {
@@ -415,16 +393,6 @@ body {
 
   .remote-layout {
     margin-block: 0;
-  }
-
-  .duration-row {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .duration-row button {
-    min-height: 48px;
   }
 
   .panel-sandbox {

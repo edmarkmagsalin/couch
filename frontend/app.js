@@ -1,5 +1,9 @@
+import { io } from 'socket.io-client';
+import remotePanelStyles from './remote-panel.css?url';
+
 const API_URL = 'https://couch-sl1x.onrender.com';
 // const API_URL = 'http://localhost:3000';
+const CouchShared = window.CouchShared;
 const hostContainer = document.getElementById('couch-root');
 hostContainer.classList.add('embedded');
 const shadow = hostContainer.attachShadow({ mode: 'open' });
@@ -12,9 +16,9 @@ async function initializeRemote() {
 
   const panelMarkup = await response.text();
   shadow.innerHTML = `
-    <link rel="stylesheet" href="panel.css">
-    <link rel="stylesheet" href="remote-panel.css">
-    ${panelMarkup.replaceAll('__COUCH_LOGO_URL__', 'assets/couch.svg')}
+    <link rel="stylesheet" href="/panel.css">
+    <link rel="stylesheet" href="${remotePanelStyles}">
+    ${panelMarkup.replaceAll('__COUCH_LOGO_URL__', '/assets/couch.svg')}
   `;
 
   const socket = io(API_URL);
@@ -41,17 +45,13 @@ async function initializeRemote() {
   const chatInput = shadow.getElementById('chat-input');
   const emojiBar = shadow.getElementById('emoji-bar');
   const timestampButton = shadow.getElementById('timestamp-btn');
-  const durationForm = document.getElementById('remote-duration-form');
-  const durationInput = document.getElementById('remote-duration');
-  const durationError = document.getElementById('remote-duration-error');
   const themeToggle = document.getElementById('theme-toggle');
-  const controller = document.getElementById('remote-controller');
   const controllerHint = document.getElementById('controller-hint');
-  const seekSlider = document.getElementById('remote-seek');
+  const seekButtons = document.getElementById('remote-seek-buttons');
   const currentTimeInput = document.getElementById('remote-current-time');
+  const resetTimeButton = document.getElementById('remote-reset-time');
   const currentTimeError = document.getElementById('remote-current-time-error');
   const playbackStatusLabel = document.getElementById('remote-playback-status');
-  const totalDurationLabel = document.getElementById('remote-total-duration');
   const playbackToggle = document.getElementById('remote-toggle-playback');
   const volumeSlider = document.getElementById('remote-volume');
   const volumeValue = document.getElementById('remote-volume-value');
@@ -63,11 +63,9 @@ async function initializeRemote() {
   let currentRoom = null;
   let isRoomJoined = false;
   let currentHost = null;
-  let durationSeconds = 0;
   let playback = { status: 'paused', timestamp: 0, updatedAt: Date.now() };
   let lastPlaybackEventAt = playback.updatedAt;
   let hasRestoredPlayback = false;
-  let isSeeking = false;
   let isEditingCurrentTime = false;
   let isCompactView = false;
   let hasRemoteVideo = false;
@@ -85,11 +83,10 @@ async function initializeRemote() {
   }
 
   usernameInput.value = username;
-  durationInput.value = localStorage.getItem('couch_remote_duration') || '';
   timestampButton.title = 'Share current playback timestamp';
   applyTheme(theme);
 
-  function parseDuration(value, { allowZero = false } = {}) {
+  function parseTime(value) {
     const parts = value.trim().split(':');
     if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) return null;
     const numbers = parts.map(Number);
@@ -100,20 +97,20 @@ async function initializeRemote() {
     const total = parts.length === 3
       ? numbers[0] * 3600 + minutes * 60 + seconds
       : minutes * 60 + seconds;
-    return Number.isSafeInteger(total) && (allowZero ? total >= 0 : total > 0) ? total : null;
+    return Number.isSafeInteger(total) && total >= 0 ? total : null;
   }
 
-  function formatDurationDigits(value) {
+  function formatTimeDigits(value) {
     const digits = value.replace(/\D/g, '');
     if (digits.length <= 2) return digits;
     if (digits.length <= 4) return `${digits.slice(0, -2)}:${digits.slice(-2)}`;
     return `${digits.slice(0, -4)}:${digits.slice(-4, -2)}:${digits.slice(-2)}`;
   }
 
-  function applyDurationFormatting(input) {
+  function applyTimeFormatting(input) {
     const caret = input.selectionStart ?? input.value.length;
     const digitsBeforeCaret = input.value.slice(0, caret).replace(/\D/g, '').length;
-    const formatted = formatDurationDigits(input.value);
+    const formatted = formatTimeDigits(input.value);
     if (formatted !== input.value) {
       input.value = formatted;
       const nextCaret = getCaretAfterDigits(formatted, digitsBeforeCaret);
@@ -136,10 +133,6 @@ async function initializeRemote() {
   if (savedSessionValue) {
     try {
       const savedSession = JSON.parse(savedSessionValue);
-      const savedDuration = typeof savedSession.duration === 'string'
-        ? savedSession.duration
-        : durationInput.value;
-      const savedDurationSeconds = parseDuration(savedDuration);
       const isValidSession = savedSession
         && typeof savedSession === 'object'
         && (savedSession.roomId === null || typeof savedSession.roomId === 'string')
@@ -150,17 +143,14 @@ async function initializeRemote() {
         && Number.isFinite(savedSession.actionAt);
 
       if (!isValidSession) {
-        console.warn('Saved Couch Remote session data is invalid; starting with the saved duration only.');
+        console.warn('Saved Couch Remote session data is invalid; starting a new session.');
       } else {
-        durationInput.value = savedDuration;
-        durationSeconds = savedDurationSeconds || 0;
         const now = Date.now();
         const elapsed = savedSession.status === 'playing' ? (now - savedSession.savedAt) / 1000 : 0;
         const restoredTimestamp = Math.max(0, savedSession.timestamp + elapsed);
-        const reachedEnd = durationSeconds > 0 && restoredTimestamp >= durationSeconds;
         playback = {
-          status: reachedEnd ? 'paused' : savedSession.status,
-          timestamp: durationSeconds ? Math.min(restoredTimestamp, durationSeconds) : restoredTimestamp,
+          status: savedSession.status,
+          timestamp: restoredTimestamp,
           updatedAt: now
         };
         lastPlaybackEventAt = savedSession.actionAt;
@@ -179,14 +169,13 @@ async function initializeRemote() {
     const elapsed = isRoomJoined && playback.status === 'playing'
       ? (Date.now() - playback.updatedAt) / 1000
       : 0;
-    return Math.min(durationSeconds || Number.MAX_SAFE_INTEGER, Math.max(0, playback.timestamp + elapsed));
+    return Math.max(0, playback.timestamp + elapsed);
   }
 
   function persistSession() {
     const timestamp = currentTimestamp();
     localStorage.setItem('couch_remote_session', JSON.stringify({
       roomId: currentRoom,
-      duration: durationInput.value,
       status: playback.status,
       timestamp,
       savedAt: Date.now(),
@@ -215,20 +204,20 @@ async function initializeRemote() {
   }
 
   function renderTimeline() {
-    if (!durationSeconds) return;
     const timestamp = currentTimestamp();
-    if (!isEditingCurrentTime && !isSeeking) currentTimeInput.value = formatTime(timestamp);
+    if (!isEditingCurrentTime) currentTimeInput.value = formatTime(timestamp);
     const isPlaying = isRoomJoined && playback.status === 'playing';
     playbackStatusLabel.textContent = isPlaying ? 'Playing' : 'Paused';
-    totalDurationLabel.textContent = formatTime(durationSeconds);
     playbackToggle.textContent = isPlaying ? 'Pause' : 'Play';
     playbackToggle.classList.toggle('is-secondary', isPlaying);
     playbackToggle.setAttribute('aria-label', isPlaying ? 'Pause playback' : 'Start playback');
-    if (!isSeeking) seekSlider.value = String(Math.min(timestamp, durationSeconds));
-    if (timestamp >= durationSeconds && isPlaying) {
-      setPlayback('paused', durationSeconds);
-      emitVideoAction('pause', durationSeconds);
-    }
+  }
+
+  function seekTo(timestamp) {
+    currentTimeError.textContent = '';
+    isEditingCurrentTime = false;
+    setPlayback(playback.status, timestamp);
+    emitVideoAction('seek', timestamp);
   }
 
   function updateButtons() {
@@ -237,11 +226,17 @@ async function initializeRemote() {
     createRoomButton.disabled = !connected || !hasUsername;
     joinRoomButton.disabled = !connected || !hasUsername || !joinRoomInput.value.trim();
     chatInput.disabled = !connected || !isRoomJoined || currentRoom === null;
-    const canControl = connected && isRoomJoined && currentRoom !== null && durationSeconds > 0;
-    seekSlider.disabled = !canControl;
+    const canControl = connected && isRoomJoined && currentRoom !== null;
+    for (const button of seekButtons.querySelectorAll('button')) {
+      button.disabled = !canControl;
+    }
     currentTimeInput.disabled = !canControl;
     playbackToggle.disabled = !canControl;
     timestampButton.disabled = !canControl;
+    controllerHint.hidden = canControl;
+    controllerHint.textContent = connected
+      ? 'Join a room to control playback.'
+      : 'Connect to Couch and join a room to control playback.';
     volumeSlider.disabled = !connected || !isRoomJoined || currentRoom === null || !hasRemoteVideo;
     for (const button of volumePresets.querySelectorAll('button')) {
       button.disabled = volumeSlider.disabled;
@@ -496,30 +491,7 @@ async function initializeRemote() {
     if (button && button !== timestampButton) sendChat(button.textContent);
   });
   timestampButton.addEventListener('click', () => {
-    if (durationSeconds > 0) sendChat(`⏱️ ${formatTime(currentTimestamp())}`);
-  });
-  durationForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const parsed = parseDuration(durationInput.value);
-    if (!parsed) {
-      durationError.textContent = 'Enter H:MM:SS or M:SS, such as 1:32:12.';
-      return;
-    }
-    durationSeconds = parsed;
-    durationError.textContent = '';
-    localStorage.setItem('couch_remote_duration', durationInput.value.trim());
-    controller.hidden = false;
-    controllerHint.hidden = true;
-    seekSlider.max = String(durationSeconds);
-    totalDurationLabel.textContent = formatTime(durationSeconds);
-    updateButtons();
-    renderTimeline();
-    persistSession();
-  });
-  durationInput.addEventListener('input', () => {
-    applyDurationFormatting(durationInput);
-    localStorage.setItem('couch_remote_duration', durationInput.value);
-    persistSession();
+    sendChat(`⏱️ ${formatTime(currentTimestamp())}`);
   });
   themeToggle.addEventListener('click', () => {
     applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
@@ -535,15 +507,12 @@ async function initializeRemote() {
     const button = event.target.closest('button[data-volume]');
     if (button && !button.disabled) setVolume(Number(button.dataset.volume));
   });
-  seekSlider.addEventListener('input', () => {
-    isSeeking = true;
-    if (!isEditingCurrentTime) currentTimeInput.value = formatTime(Number(seekSlider.value));
-  });
-  seekSlider.addEventListener('change', () => {
-    const timestamp = Number(seekSlider.value);
-    isSeeking = false;
-    setPlayback(playback.status, timestamp);
-    emitVideoAction('seek', timestamp);
+  resetTimeButton.addEventListener('click', () => seekTo(0));
+  seekButtons.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-seek-offset]');
+    if (!button || button.disabled) return;
+    const timestamp = Math.max(0, currentTimestamp() + Number(button.dataset.seekOffset));
+    seekTo(timestamp);
   });
   currentTimeInput.addEventListener('focus', () => {
     isEditingCurrentTime = true;
@@ -551,19 +520,15 @@ async function initializeRemote() {
     currentTimeInput.select();
   });
   currentTimeInput.addEventListener('input', () => {
-    applyDurationFormatting(currentTimeInput);
+    applyTimeFormatting(currentTimeInput);
     currentTimeError.textContent = '';
   });
   currentTimeInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      const timestamp = parseDuration(currentTimeInput.value, { allowZero: true });
+      const timestamp = parseTime(currentTimeInput.value);
       if (timestamp === null) {
         currentTimeError.textContent = 'Enter a time in M:SS or H:MM:SS format.';
-        return;
-      }
-      if (timestamp > durationSeconds) {
-        currentTimeError.textContent = `Enter a time at or before ${formatTime(durationSeconds)}.`;
         return;
       }
 
@@ -674,15 +639,6 @@ async function initializeRemote() {
     }
     updateButtons();
   });
-
-  const savedDuration = durationSeconds || parseDuration(durationInput.value);
-  if (savedDuration) {
-    durationSeconds = savedDuration;
-    controller.hidden = false;
-    controllerHint.hidden = true;
-    seekSlider.max = String(durationSeconds);
-    totalDurationLabel.textContent = formatTime(durationSeconds);
-  }
 
   updateViewToggle();
   showCompactView();

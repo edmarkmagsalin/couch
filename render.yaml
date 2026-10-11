@@ -2,5 +2,5 @@ services:
   - type: web
     name: couch-remote
     runtime: static
-    buildCommand: node scripts/prepare-frontend.mjs
-    staticPublishPath: ./frontend
+    buildCommand: pnpm frontend:build
+    staticPublishPath: ./frontend/dist

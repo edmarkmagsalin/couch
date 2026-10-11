@@ -4,6 +4,7 @@ dist
 .env
 
 /frontend/video.mp4
+/frontend/public/
 /frontend/panel.html
 /frontend/panel.css
 /frontend/couch-shared.js

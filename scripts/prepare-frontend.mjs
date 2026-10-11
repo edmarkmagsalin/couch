@@ -3,10 +3,10 @@ import { dirname, join } from 'node:path';
 
 const version = JSON.parse(readFileSync('chrome-extension/manifest.json', 'utf8')).version;
 const sharedAssets = [
-  ['chrome-extension/couch-shared.js', 'frontend/couch-shared.js'],
-  ['chrome-extension/panel.html', 'frontend/panel.html'],
-  ['chrome-extension/panel.css', 'frontend/panel.css'],
-  ['chrome-extension/assets/couch.svg', 'frontend/assets/couch.svg']
+  ['chrome-extension/couch-shared.js', 'frontend/public/couch-shared.js'],
+  ['chrome-extension/panel.html', 'frontend/public/panel.html'],
+  ['chrome-extension/panel.css', 'frontend/public/panel.css'],
+  ['chrome-extension/assets/couch.svg', 'frontend/public/assets/couch.svg']
 ];
 
 for (const [source, destination] of sharedAssets) {
@@ -21,4 +21,4 @@ for (const [source, destination] of sharedAssets) {
   }
 }
 
-console.log('Copied shared Couch panel assets to the static frontend directory.');
+console.log('Copied shared Couch panel assets to the frontend public directory.');

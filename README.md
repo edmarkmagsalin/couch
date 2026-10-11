@@ -24,9 +24,9 @@ The frontend saves the room, duration, playback state, and playhead locally, the
 
 On Couch Remote, the chat panel appears in a card above the playback controller. Drag the grip beneath the chat history to resize it; the surrounding layout adjusts to its height, which is saved locally. In the Chrome extension, the chat panel remains floating: drag the grip to resize it, then drag the panel near an edge to snap or dock it.
 
-The extension and remote page share the floating panel template and styles in `chrome-extension/panel.html` and `chrome-extension/panel.css`, plus emoji detection and timestamp formatting in `chrome-extension/couch-shared.js`. Render's build command copies these assets into the static publish directory.
+The extension and remote page share the floating panel template and styles in `chrome-extension/panel.html` and `chrome-extension/panel.css`, plus emoji detection and timestamp formatting in `chrome-extension/couch-shared.js`. The frontend build copies these assets into Vite's public assets before building.
 
-To test the frontend locally, run `pnpm frontend:dev` and open `http://localhost:4173`. This prepares the shared assets and serves the static frontend; stop the server with `Ctrl+C`. Python 3 is required.
+To run the frontend locally, run `pnpm frontend:dev` and open `http://localhost:4173`. Vite prepares the shared assets and automatically reloads frontend changes; stop the server with `Ctrl+C`. Run `pnpm frontend:build` to create the production site in `frontend/dist`.
 
 ## Links
 

@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090909">
   <title>Couch Remote</title>
-  <link rel="stylesheet" href="remote.css">
-  <script src="https://couch-sl1x.onrender.com/socket.io/socket.io.js" defer></script>
-  <script src="couch-shared.js" defer></script>
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="/remote.css">
 </head>
 <body>
   <main class="controller-shell">
@@ -23,16 +20,6 @@
         </div>
         <h1 id="controller-title">Playback controller</h1>
         <p class="controller-description">Join the same Couch room with the same username as the Chrome extension to control playback and adjust your video’s volume.</p>
-
-        <form id="remote-duration-form" class="duration-form">
-          <label for="remote-duration">Video duration</label>
-          <div class="duration-row">
-            <input id="remote-duration" type="text" inputmode="text" enterkeyhint="done" placeholder="1:32:12" aria-describedby="remote-duration-help remote-duration-error">
-            <button id="remote-duration-submit" type="submit">Set duration</button>
-          </div>
-          <p id="remote-duration-help">Enter H:MM:SS or M:SS, then tap Set duration to apply. This controls the shared timeline; no video is hosted here.</p>
-          <p id="remote-duration-error" class="controller-error" role="alert"></p>
-        </form>
 
         <section class="volume-panel" aria-label="Personal video volume">
           <div class="volume-heading">
@@ -51,22 +38,33 @@
           <p id="remote-volume-status" class="volume-status" role="status" aria-live="polite">Join a room with the same username as Couch on your video to adjust its volume.</p>
         </section>
 
-        <section id="remote-controller" class="transport-panel" aria-label="Playback controls" hidden>
+        <section id="remote-controller" class="transport-panel" aria-label="Playback controls">
           <div class="time-readout">
-            <input id="remote-current-time" type="text" inputmode="numeric" value="0:00" aria-label="Current playback time. Enter M:SS or H:MM:SS and press Enter to seek." aria-describedby="remote-current-time-error" autocomplete="off">
+            <input id="remote-current-time" type="text" inputmode="numeric" enterkeyhint="done" value="0:00" aria-label="Current playback time. Enter M:SS or H:MM:SS and press Enter to seek." aria-describedby="remote-current-time-error" autocomplete="off">
             <span id="remote-playback-status">Paused</span>
-            <span id="remote-total-duration">0:00</span>
           </div>
           <p id="remote-current-time-error" class="controller-error" role="alert"></p>
-          <input id="remote-seek" type="range" min="0" value="0" step="0.1" aria-label="Seek playback" disabled>
+          <div id="remote-seek-buttons" class="seek-buttons" role="group" aria-label="Seek playback">
+            <button type="button" data-seek-offset="-60" aria-label="Seek back 60 seconds" disabled>-60s</button>
+            <button type="button" data-seek-offset="-30" aria-label="Seek back 30 seconds" disabled>-30s</button>
+            <button type="button" data-seek-offset="-15" aria-label="Seek back 15 seconds" disabled>-15s</button>
+            <button type="button" data-seek-offset="-5" aria-label="Seek back 5 seconds" disabled>-5s</button>
+            <button type="button" data-seek-offset="5" aria-label="Seek forward 5 seconds" disabled>+5s</button>
+            <button type="button" data-seek-offset="15" aria-label="Seek forward 15 seconds" disabled>+15s</button>
+            <button type="button" data-seek-offset="30" aria-label="Seek forward 30 seconds" disabled>+30s</button>
+            <button type="button" data-seek-offset="60" aria-label="Seek forward 60 seconds" disabled>+60s</button>
+          </div>
           <div class="transport-buttons">
             <button id="remote-toggle-playback" type="button" disabled>Play</button>
+            <button id="remote-reset-time" class="is-secondary" type="button" aria-label="Reset current time to 0:00">Reset</button>
           </div>
         </section>
-        <p id="controller-hint" class="controller-hint">Set a duration to enable the timeline and playback controls.</p>
+        <p id="controller-hint" class="controller-hint">Join a room to control playback.</p>
       </section>
     </div>
   </main>
   <div id="connection-status" role="status" aria-live="polite">Connecting to Couch...</div>
+  <script src="/couch-shared.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
