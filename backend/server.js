@@ -20,9 +20,24 @@ const roomStates = {};
 const emptyRoomTimers = {};
 const ROOM_RECONNECT_GRACE_MS = 60 * 1000;
 
+function getRoomUserList(room) {
+  const usernames = [...new Set(room.users.map(user => user.username))];
+  const hostIndex = usernames.indexOf(room.host);
+  if (hostIndex > 0) usernames.unshift(usernames.splice(hostIndex, 1)[0]);
+  return usernames;
+}
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
+  function broadcastRoomUsers(roomId) {
+    const room = roomStates[roomId];
+    if (!room) return;
+    io.in(roomId).emit('room-users', {
+      users: getRoomUserList(room),
+      host: room.host
+    });
+  }
 
   // --- JOIN ROOM EVENT ---
   socket.on('join-room', ({ roomId, username, action, clientType }, callback) => {
@@ -94,6 +109,7 @@ io.on('connection', (socket) => {
       }
     }
 
+    broadcastRoomUsers(roomId);
     if (typeof callback === 'function') {
       callback({ success: true, host: roomStates[roomId].host });
     }
@@ -157,6 +173,7 @@ io.on('connection', (socket) => {
         io.in(roomId).emit('new-message', systemMessage);
       }
     }
+    broadcastRoomUsers(roomId);
   }
 
   // --- LEAVE ROOM EVENT ---

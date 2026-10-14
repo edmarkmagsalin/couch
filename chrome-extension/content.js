@@ -487,6 +487,9 @@ window.addEventListener('resize', snapToEdge);
 const messageList = shadow.getElementById('messages');
 const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
+const roomUsersToggle = shadow.getElementById('room-users-toggle');
+const roomUsersPanel = shadow.getElementById('room-users-panel');
+const roomUsersList = shadow.getElementById('room-users-list');
 const messageMain = messageList.closest('main');
 
 const messagesVisibilityObserver = new IntersectionObserver(([entry]) => {
@@ -599,6 +602,20 @@ function clearChatHistory() {
   messageList.innerHTML = '';
   compactMessages.innerHTML = '';
 }
+
+function renderRoomUsers(users, host) {
+  roomUsersList.replaceChildren();
+  for (const username of users) {
+    const item = document.createElement('li');
+    item.textContent = username === host ? `${username} (host)` : username;
+    roomUsersList.append(item);
+  }
+}
+
+roomUsersToggle.addEventListener('click', () => {
+  roomUsersPanel.hidden = !roomUsersPanel.hidden;
+  roomUsersToggle.setAttribute('aria-expanded', String(!roomUsersPanel.hidden));
+});
 
 function emitLocalChatMessage(text) {
   const trimmedText = String(text ?? '').trim();
@@ -818,6 +835,9 @@ leaveRoomBtn.addEventListener('click', () => {
   socket.emit('leave-room', { roomId: currentRoom, username: myUsername });
 
   clearChatHistory();
+  roomUsersList.replaceChildren();
+  roomUsersPanel.hidden = true;
+  roomUsersToggle.setAttribute('aria-expanded', 'false');
   currentRoom = null;
   chrome.storage.local.remove('couch_room');
   updateLobbyButtons();
@@ -884,6 +904,12 @@ socket.on('new-message', (data) => {
 });
 socket.on('sync-room', (state) => {
   currentHost = state.host;
+  renderRoomUsers(
+    [...new Set((state.users || []).map(user => user.username))].sort((first, second) => (
+      first === currentHost ? -1 : second === currentHost ? 1 : 0
+    )),
+    currentHost
+  );
   pendingVideoState = state.video || null;
 
   const video = findVideoElement();
@@ -909,6 +935,10 @@ socket.on('update-host', ({ newHost }) => {
     displayHostName.textContent = newHost;
     console.log(`Host title transferred to: ${newHost}`);
   }
+});
+socket.on('room-users', ({ users, host }) => {
+  currentHost = host;
+  renderRoomUsers(users, host);
 });
 
 sessionReady.then((savedRoom) => {

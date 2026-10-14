@@ -36,6 +36,9 @@ async function initializeRemote() {
   const joinError = shadow.getElementById('join-error');
   const roomLoading = shadow.getElementById('room-loading-message');
   const displayRoomId = shadow.getElementById('display-room-id');
+  const roomUsersToggle = shadow.getElementById('room-users-toggle');
+  const roomUsersPanel = shadow.getElementById('room-users-panel');
+  const roomUsersList = shadow.getElementById('room-users-list');
   const clearChatButton = shadow.getElementById('clear-chat-btn');
   const leaveRoomButton = shadow.getElementById('leave-room-btn');
   const messageList = shadow.getElementById('messages');
@@ -375,6 +378,9 @@ async function initializeRemote() {
     persistSession();
     messageList.replaceChildren();
     compactMessages.replaceChildren();
+    roomUsersList.replaceChildren();
+    roomUsersPanel.hidden = true;
+    roomUsersToggle.setAttribute('aria-expanded', 'false');
     displayRoomId.textContent = '...';
     lobby.classList.remove('remote-hidden');
     lobby.classList.add('remote-expanded');
@@ -433,6 +439,15 @@ async function initializeRemote() {
     compactMessages.replaceChildren();
   }
 
+  function renderRoomUsers(users, host) {
+    roomUsersList.replaceChildren();
+    for (const roomUsername of users) {
+      const item = document.createElement('li');
+      item.textContent = roomUsername === host ? `${roomUsername} (host)` : roomUsername;
+      roomUsersList.append(item);
+    }
+  }
+
   function isVisibleAfterChatClear(message) {
     return chatHistoryClearedAt === 0
       || (Number.isFinite(message.time) && message.time > chatHistoryClearedAt);
@@ -466,6 +481,10 @@ async function initializeRemote() {
   viewToggleButton.addEventListener('click', () => isCompactView ? showFullView() : showCompactView());
   compactView.addEventListener('click', showFullView);
   clearChatButton.addEventListener('click', clearOwnChatHistory);
+  roomUsersToggle.addEventListener('click', () => {
+    roomUsersPanel.hidden = !roomUsersPanel.hidden;
+    roomUsersToggle.setAttribute('aria-expanded', String(!roomUsersPanel.hidden));
+  });
 
   usernameInput.addEventListener('input', updateButtons);
   joinRoomInput.addEventListener('input', updateButtons);
@@ -651,6 +670,11 @@ async function initializeRemote() {
       isRoomJoined = true;
     }
     currentHost = state.host || currentHost;
+    const roomUsernames = [...new Set((state.users || []).map(user => user.username))];
+    roomUsernames.sort((first, second) => (
+      first === currentHost ? -1 : second === currentHost ? 1 : 0
+    ));
+    renderRoomUsers(roomUsernames, currentHost);
     if (state.video) {
       const serverActionAt = Number(state.video.updatedAt);
       const shouldUseServer = !hasRestoredPlayback
@@ -677,6 +701,10 @@ async function initializeRemote() {
   socket.on('pause-video', ({ timestamp, updatedAt }) => setPlayback('paused', timestamp, updatedAt));
   socket.on('seek-video', ({ timestamp, updatedAt }) => setPlayback(playback.status, timestamp, updatedAt));
   socket.on('update-host', ({ newHost }) => { currentHost = newHost; });
+  socket.on('room-users', ({ users, host }) => {
+    currentHost = host;
+    renderRoomUsers(users, host);
+  });
   socket.on('video-volume-state', ({ available, volume }) => {
     hasReceivedVolumeState = true;
     hasRemoteVideo = available === true && Number.isFinite(volume);

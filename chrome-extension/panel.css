@@ -116,7 +116,7 @@
       padding: 8px;
       cursor: pointer;
       color: white;
-      border: none;
+      border: 1px solid white;
       border-radius: 4px;
       background-color: var(--couch-accent);
       background-image: linear-gradient(
@@ -130,7 +130,7 @@
       transition: background-position 450ms ease, filter 180ms ease;
     }
 
-    .btn:not(.secondary):not(:disabled):is(:hover, :focus-visible) {
+    .btn:not(.secondary):not(.tertiary):not(:disabled):is(:hover, :focus-visible) {
       background-position: 0 0;
       filter: brightness(1.08);
     }
@@ -160,6 +160,16 @@
 
     .btn.secondary:not(:disabled):is(:hover, :focus-visible) {
       background-color: #1f1f1f;
+    }
+
+    .btn.tertiary {
+      background-color: #555;
+      background-image: none;
+      transition: background-color 160ms ease;
+    }
+
+    .btn.tertiary:not(:disabled):is(:hover, :focus-visible) {
+      background-color: #686868;
     }
 
     .btn.small {
@@ -342,12 +352,48 @@
     }
 
     .room-header {
+      position: relative;
       font-size: inherit;
       padding: 4px 5px;
       font-family: monospace;
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+
+    .room-users-panel {
+      position: absolute;
+      z-index: 2;
+      top: calc(100% + 4px);
+      left: 8px;
+      right: 8px;
+      box-sizing: border-box;
+      max-height: min(240px, 50vh);
+      overflow-y: auto;
+      padding: 8px;
+      border: 1px solid rgb(255 255 255 / 16%);
+      border-radius: 8px;
+      background: rgb(15 15 15 / 96%);
+      font-family: sans-serif;
+    }
+
+    .room-users-panel[hidden] {
+      display: none;
+    }
+
+    #room-users-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgb(255 255 255 / 8%);
+      list-style: none;
+    }
+
+    #room-users-list:empty {
+      display: none;
     }
 
     #display-room-id[data-copy-state="copied"]::after {

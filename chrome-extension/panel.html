@@ -34,8 +34,12 @@
     <div id="chat-container">
       <div class="room-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; font-size: inherit;">
         <button id="display-room-id" class="btn small" type="button" title="Copy room code" aria-label="Copy room code">...</button>
+        <button id="room-users-toggle" class="btn small secondary" type="button" aria-expanded="false" aria-controls="room-users-panel">Users</button>
         <button id="clear-chat-btn" class="btn small secondary" type="button" title="Clear chat history on this device" aria-label="Clear chat history on this device">Clear</button>
-        <button id="leave-room-btn" class="btn small secondary">Exit</button>
+        <button id="leave-room-btn" class="btn small tertiary">Exit</button>
+        <div id="room-users-panel" class="room-users-panel" hidden>
+          <ul id="room-users-list" aria-label="Users in this room"></ul>
+        </div>
       </div>
       <main><ul id="messages"></ul></main>
       <footer>
