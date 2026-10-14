@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import remotePanelStyles from './remote-panel.css?url';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = import.meta.env.API_URL;
 const CouchShared = window.CouchShared;
 const hostContainer = document.getElementById('couch-root');
 hostContainer.classList.add('embedded');
