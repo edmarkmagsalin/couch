@@ -177,6 +177,34 @@
       padding: 3px 6px;
     }
 
+    .btn.icon-button {
+      display: inline-flex;
+      width: 15px;
+      height: 15px;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    .btn.icon-button img {
+      display: block;
+      width: 10px;
+      height: 10px;
+      filter: brightness(0) invert(1);
+    }
+
+    #leave-room-btn {
+      margin-left: auto;
+    }
+
+    #share-room-btn[data-copy-state="copied"] {
+      background-color: #166534;
+    }
+
+    #share-room-btn[data-copy-state="error"] {
+      background-color: #991b1b;
+    }
+
     header {
       cursor: all-scroll;
       user-select: none;

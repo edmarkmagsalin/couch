@@ -24,6 +24,26 @@ function formatTimestamp(seconds) {
     : `${minutes}:${secondsText}`;
 }
 
+function parseTimestamp(value) {
+  const parts = String(value ?? '').trim().split(':');
+  if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) return null;
+
+  const numbers = parts.map(Number);
+  const seconds = numbers.at(-1);
+  const minutes = numbers.at(-2);
+  if (seconds > 59 || (parts.length === 3 && minutes > 59)) return null;
+
+  const total = parts.length === 3
+    ? numbers[0] * 3600 + minutes * 60 + seconds
+    : minutes * 60 + seconds;
+  return Number.isSafeInteger(total) && total >= 0 ? total : null;
+}
+
+function parseSeekCommand(text) {
+  const match = /^\/seek\+(\d+:\d{2}(?::\d{2})?)$/.exec(String(text ?? '').trim());
+  return match ? parseTimestamp(match[1]) : null;
+}
+
 function setArrowIcon(button, direction) {
   const rotations = { up: 0, right: 90, down: 180, left: 270 };
   const rotation = rotations[direction];
@@ -117,4 +137,11 @@ function createChatResizer(handle, host, { initialHeight, onCommit = () => {} } 
   };
 }
 
-globalThis.CouchShared = Object.freeze({ isSingleEmoji, formatTimestamp, setArrowIcon, createChatResizer });
+globalThis.CouchShared = Object.freeze({
+  isSingleEmoji,
+  formatTimestamp,
+  parseTimestamp,
+  parseSeekCommand,
+  setArrowIcon,
+  createChatResizer
+});

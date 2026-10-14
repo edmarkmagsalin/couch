@@ -17,7 +17,12 @@ async function initializeRemote() {
   shadow.innerHTML = `
     <link rel="stylesheet" href="/panel.css">
     <link rel="stylesheet" href="${remotePanelStyles}">
-    ${panelMarkup.replaceAll('__COUCH_LOGO_URL__', '/assets/couch.svg')}
+    ${panelMarkup
+      .replaceAll('__COUCH_LOGO_URL__', '/assets/couch.svg')
+      .replaceAll('__COUCH_LINK_URL__', '/assets/link.svg')
+      .replaceAll('__COUCH_USERS_URL__', '/assets/users.svg')
+      .replaceAll('__COUCH_ERASER_URL__', '/assets/eraser.svg')
+      .replaceAll('__COUCH_LOGOUT_URL__', '/assets/logout.svg')}
   `;
 
   const socket = io(API_URL);
@@ -28,6 +33,7 @@ async function initializeRemote() {
   const viewToggleButton = shadow.getElementById('view-toggle-btn');
   const chatContainer = shadow.getElementById('chat-container');
   const lobby = shadow.getElementById('lobby');
+  const shareRoomButton = shadow.getElementById('share-room-btn');
   const usernameInput = shadow.getElementById('username-input');
   const createRoomButton = shadow.getElementById('create-room-btn');
   const joinRoomForm = shadow.getElementById('join-room-form');
@@ -67,6 +73,7 @@ async function initializeRemote() {
     username = `Guest-${Math.random().toString(36).substring(2, 7)}`;
     localStorage.setItem('couch_username', username);
   }
+  const roomCodeFromUrl = new URLSearchParams(window.location.search).get('roomCode')?.trim().toLowerCase() || '';
   let currentRoom = null;
   let isRoomJoined = false;
   let currentHost = null;
@@ -92,22 +99,9 @@ async function initializeRemote() {
   }
 
   usernameInput.value = username;
+  joinRoomInput.value = roomCodeFromUrl;
   timestampButton.title = 'Share current playback timestamp';
   applyTheme(theme);
-
-  function parseTime(value) {
-    const parts = value.trim().split(':');
-    if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) return null;
-    const numbers = parts.map(Number);
-    const seconds = numbers.at(-1);
-    const minutes = numbers.at(-2);
-    if (seconds > 59 || (parts.length === 3 && minutes > 59)) return null;
-
-    const total = parts.length === 3
-      ? numbers[0] * 3600 + minutes * 60 + seconds
-      : minutes * 60 + seconds;
-    return Number.isSafeInteger(total) && total >= 0 ? total : null;
-  }
 
   function formatTimeDigits(value) {
     const digits = value.replace(/\D/g, '');
@@ -228,7 +222,7 @@ async function initializeRemote() {
   }
 
   function submitCurrentTime(value = currentTimeInput.value) {
-    const timestamp = parseTime(value);
+    const timestamp = CouchShared.parseTimestamp(value);
     if (timestamp === null) {
       currentTimeError.textContent = 'Enter a time in M:SS or H:MM:SS format.';
       return;
@@ -480,6 +474,12 @@ async function initializeRemote() {
   function sendChat(text) {
     const message = text.trim();
     if (!message || !currentRoom || !isRoomJoined || !socket.connected) return;
+    const seekTimestamp = CouchShared.parseSeekCommand(message);
+    if (seekTimestamp !== null) {
+      seekTo(seekTimestamp);
+      return;
+    }
+
     addMessage({ sender: 'You', text: message, time: Date.now() });
     socket.emit('send-message', { roomId: currentRoom, username, text: message });
   }
@@ -593,6 +593,20 @@ async function initializeRemote() {
       console.error('Could not copy room code:', error);
       displayRoomId.dataset.copyState = 'error';
       setTimeout(() => delete displayRoomId.dataset.copyState, 2000);
+    }
+  });
+  shareRoomButton.addEventListener('click', async () => {
+    if (!currentRoom) return;
+    const inviteUrl = new URL(window.location.href);
+    inviteUrl.searchParams.set('roomCode', currentRoom);
+    try {
+      await navigator.clipboard.writeText(inviteUrl.toString());
+      shareRoomButton.dataset.copyState = 'copied';
+      setTimeout(() => delete shareRoomButton.dataset.copyState, 2000);
+    } catch (error) {
+      console.error('Could not copy room invite link:', error);
+      shareRoomButton.dataset.copyState = 'error';
+      setTimeout(() => delete shareRoomButton.dataset.copyState, 2000);
     }
   });
   chatForm.addEventListener('submit', (event) => {

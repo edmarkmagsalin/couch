@@ -298,6 +298,10 @@ if (!panelResponse.ok) throw new Error(`Panel template request failed: ${panelRe
 const panelMarkup = await panelResponse.text();
 shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('panel.css')}">${panelMarkup
   .replaceAll('__COUCH_LOGO_URL__', chrome.runtime.getURL('assets/couch.svg'))
+  .replaceAll('__COUCH_LINK_URL__', chrome.runtime.getURL('assets/link.svg'))
+  .replaceAll('__COUCH_USERS_URL__', chrome.runtime.getURL('assets/users.svg'))
+  .replaceAll('__COUCH_ERASER_URL__', chrome.runtime.getURL('assets/eraser.svg'))
+  .replaceAll('__COUCH_LOGOUT_URL__', chrome.runtime.getURL('assets/logout.svg'))
   .replaceAll('__COUCH_VERSION__', chrome.runtime.getManifest().version)}`;
 document.body.appendChild(hostContainer);
 
@@ -737,6 +741,21 @@ function emitLocalChatMessage(text) {
   const trimmedText = String(text ?? '').trim();
   if (!trimmedText || !currentRoom) return;
 
+  const seekTimestamp = CouchShared.parseSeekCommand(trimmedText);
+  if (seekTimestamp !== null) {
+    pendingVideoState = { status: 'seeking', timestamp: seekTimestamp };
+    const video = findVideoElement();
+    if (video) applyVideoTime(video, seekTimestamp);
+    socket.emit('seek-video', { roomId: currentRoom, timestamp: seekTimestamp });
+    socket.emit('video-action', {
+      roomId: currentRoom,
+      username: myUsername,
+      action: 'seek',
+      timestamp: seekTimestamp
+    });
+    return;
+  }
+
   appendMessage('You', trimmedText);
   socket.emit('send-message', {
     roomId: currentRoom,
@@ -750,6 +769,7 @@ function emitLocalChatMessage(text) {
 const lobbyView = shadow.getElementById('lobby');
 const chatContainer = shadow.getElementById('chat-container');
 const displayRoomId = shadow.getElementById('display-room-id');
+const shareRoomButton = shadow.getElementById('share-room-btn');
 const joinRoomInput = shadow.getElementById('join-room-input');
 const joinRoomBtn = shadow.getElementById('join-room-btn');
 const joinRoomForm = shadow.getElementById('join-room-form');
@@ -759,6 +779,8 @@ const usernameInput = shadow.getElementById('username-input');
 const createRoomBtn = shadow.getElementById('create-room-btn');
 const createRoomForm = shadow.getElementById('create-room-form');
 const displayHostName = shadow.getElementById('display-host-name');
+const roomCodeFromUrl = new URLSearchParams(window.location.search).get('roomCode')?.trim() || '';
+if (roomCodeFromUrl) joinRoomInput.value = roomCodeFromUrl;
 
 const sessionReady = chrome.storage.local.get([
   'couch_username',
@@ -1009,6 +1031,35 @@ displayRoomId.addEventListener('click', () => {
   }).catch((error) => {
     console.error('Failed to copy room code:', error);
     showCopyState('error', 'Could not copy room code');
+  });
+});
+
+let shareFeedbackTimer = null;
+
+shareRoomButton.addEventListener('click', () => {
+  if (!currentRoom) return;
+
+  const showShareState = (state, label) => {
+    shareRoomButton.dataset.copyState = state;
+    shareRoomButton.setAttribute('aria-label', label);
+    shareRoomButton.title = label;
+
+    if (shareFeedbackTimer !== null) clearTimeout(shareFeedbackTimer);
+    shareFeedbackTimer = setTimeout(() => {
+      delete shareRoomButton.dataset.copyState;
+      shareRoomButton.setAttribute('aria-label', 'Copy room invite link');
+      shareRoomButton.title = 'Copy room invite link';
+      shareFeedbackTimer = null;
+    }, 2000);
+  };
+
+  const inviteUrl = new URL(window.location.href);
+  inviteUrl.searchParams.set('roomCode', currentRoom);
+  navigator.clipboard.writeText(inviteUrl.toString()).then(() => {
+    showShareState('copied', 'Room invite link copied');
+  }).catch((error) => {
+    console.error('Failed to copy room invite link:', error);
+    showShareState('error', 'Could not copy room invite link');
   });
 });
 
