@@ -33,7 +33,7 @@ jobs:
       - name: Build extension package
         run: pnpm package
         env:
-          COUCH_SERVER_URL: ${{ secrets.COUCH_SERVER_URL }}
+          API_URL: ${{ secrets.API_URL }}
           COUCH_PACKAGE_OUTPUT: ${{ runner.temp }}/couch-chrome-extension.zip
 
       - name: Publish GitHub release

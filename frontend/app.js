@@ -1,8 +1,7 @@
 import { io } from 'socket.io-client';
 import remotePanelStyles from './remote-panel.css?url';
 
-const API_URL = 'https://couch-sl1x.onrender.com';
-// const API_URL = 'http://localhost:3000';
+const API_URL = 'http://localhost:3000';
 const CouchShared = window.CouchShared;
 const hostContainer = document.getElementById('couch-root');
 hostContainer.classList.add('embedded');
@@ -360,6 +359,7 @@ async function initializeRemote() {
     chatContainer.classList.remove('remote-hidden');
     updateButtons();
     showFullView();
+    requestPlaybackSync();
   }
 
   function showLobby() {
@@ -534,7 +534,7 @@ async function initializeRemote() {
     setPlayback(nextStatus, timestamp);
     emitVideoAction(nextStatus === 'playing' ? 'play' : 'pause', timestamp);
   });
-  syncPlaybackButton.addEventListener('click', () => {
+  function requestPlaybackSync() {
     if (!currentRoom || !isRoomJoined || !socket.connected || isSyncingPlayback) return;
 
     const roomId = currentRoom;
@@ -561,7 +561,8 @@ async function initializeRemote() {
       const stateLabel = result.state.status === 'playing' ? 'playing' : 'paused';
       syncPlaybackStatus.textContent = `Synced to ${formatTime(result.state.timestamp)} (${stateLabel}).`;
     });
-  });
+  }
+  syncPlaybackButton.addEventListener('click', requestPlaybackSync);
   volumeSlider.addEventListener('input', () => setVolume(Number(volumeSlider.value)));
   volumePresets.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-volume]');
@@ -632,6 +633,8 @@ async function initializeRemote() {
   });
   socket.on('disconnect', () => {
     const timestamp = currentTimestamp();
+    playbackSyncRequestId += 1;
+    isSyncingPlayback = false;
     isRoomJoined = false;
     hasRemoteVideo = false;
     hasReceivedVolumeState = false;

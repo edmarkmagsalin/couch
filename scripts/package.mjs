@@ -12,14 +12,14 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-const serverUrl = process.env.COUCH_SERVER_URL;
+const serverUrl = process.env.API_URL;
 const archivePath = resolve(
   process.env.COUCH_PACKAGE_OUTPUT ?? join(tmpdir(), 'couch-chrome-extension.zip'),
 );
 const packageDestination = process.env.COUCH_PACKAGE_DESTINATION;
 
 if (!serverUrl) {
-  throw new Error('COUCH_SERVER_URL must be set');
+  throw new Error('API_URL must be set');
 }
 
 const tempDirectory = mkdtempSync(join(tmpdir(), 'couch-package-'));
