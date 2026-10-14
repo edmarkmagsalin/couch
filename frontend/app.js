@@ -62,7 +62,11 @@ async function initializeRemote() {
   const volumeStatus = document.getElementById('remote-volume-status');
   const themeColor = document.querySelector('meta[name="theme-color"]');
 
-  let username = localStorage.getItem('couch_username') || '';
+  let username = localStorage.getItem('couch_username')?.trim() || '';
+  if (!username) {
+    username = `Guest-${Math.random().toString(36).substring(2, 7)}`;
+    localStorage.setItem('couch_username', username);
+  }
   let currentRoom = null;
   let isRoomJoined = false;
   let currentHost = null;
@@ -159,9 +163,6 @@ async function initializeRemote() {
           updatedAt: now
         };
         lastPlaybackEventAt = savedSession.actionAt;
-        hasRestoredPlayback = true;
-        currentRoom = savedSession.roomId;
-        if (currentRoom) joinRoomInput.value = currentRoom;
       }
     } catch (error) {
       console.error('Could not restore Couch Remote session:', error);
@@ -180,13 +181,14 @@ async function initializeRemote() {
   function persistSession() {
     const timestamp = currentTimestamp();
     localStorage.setItem('couch_remote_session', JSON.stringify({
-      roomId: currentRoom,
+      roomId: null,
       status: playback.status,
       timestamp,
       savedAt: Date.now(),
       actionAt: lastPlaybackEventAt
     }));
   }
+  persistSession();
 
   function emitVideoAction(action, timestamp) {
     if (!currentRoom || !isRoomJoined || !socket.connected) return;
@@ -276,6 +278,35 @@ async function initializeRemote() {
     themeToggle.setAttribute('aria-label', nextLabel);
   }
 
+  function appendTextWithHighlightedUsernames(element, text, usernames) {
+    element.replaceChildren();
+    const alternatives = [...new Set(usernames.filter(roomUsername => (
+      typeof roomUsername === 'string' && roomUsername
+    )))]
+      .sort((first, second) => second.length - first.length)
+      .map(roomUsername => roomUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    if (alternatives.length === 0) {
+      element.textContent = text;
+      return;
+    }
+
+    const matcher = new RegExp(
+      `(^|[^\\p{L}\\p{N}_])(${alternatives.join('|')})(?=$|[^\\p{L}\\p{N}_])`,
+      'gu'
+    );
+    let cursor = 0;
+    for (const match of text.matchAll(matcher)) {
+      const usernameIndex = match.index + match[1].length;
+      element.append(document.createTextNode(text.slice(cursor, usernameIndex)));
+      const username = document.createElement('span');
+      username.className = 'system-username';
+      username.textContent = match[2];
+      element.append(username);
+      cursor = usernameIndex + match[2].length;
+    }
+    element.append(document.createTextNode(text.slice(cursor)));
+  }
+
   function addMessage(message) {
     const row = document.createElement('li');
     row.className = 'message-row';
@@ -288,6 +319,33 @@ async function initializeRemote() {
     content.className = 'message-content';
     content.textContent = message.text;
     if (isSystem) {
+      if (message.type === 'playback-position-announcement' && Array.isArray(message.participants)) {
+        content.classList.add('playback-announcement');
+        content.replaceChildren();
+        const heading = document.createElement('span');
+        heading.className = 'playback-announcement-heading';
+        heading.textContent = "Status check every 5 mins";
+        content.append(heading);
+
+        const participantList = document.createElement('span');
+        participantList.className = 'playback-announcement-participants';
+        for (const participant of message.participants) {
+          const participantName = document.createElement('span');
+          participantName.className = 'playback-announcement-name';
+          appendTextWithHighlightedUsernames(
+            participantName,
+            `${participant.username}${participant.isHost ? ' (host)' : ''}`,
+            [participant.username]
+          );
+          const participantPosition = document.createElement('span');
+          participantPosition.className = 'playback-announcement-position';
+          participantPosition.textContent = `⏱️ ${participant.position}`;
+          participantList.append(participantName, participantPosition);
+        }
+        content.append(participantList);
+      } else {
+        appendTextWithHighlightedUsernames(content, message.text, message.highlightedUsernames || []);
+      }
       row.append(content);
     } else {
       if (!isOwnMessage) {
@@ -362,7 +420,6 @@ async function initializeRemote() {
     chatContainer.classList.remove('remote-hidden');
     updateButtons();
     showFullView();
-    requestPlaybackSync();
   }
 
   function showLobby() {
@@ -487,6 +544,12 @@ async function initializeRemote() {
   });
 
   usernameInput.addEventListener('input', updateButtons);
+  usernameInput.addEventListener('change', () => {
+    const enteredUsername = usernameInput.value.trim();
+    if (!enteredUsername) return;
+    username = enteredUsername;
+    localStorage.setItem('couch_username', username);
+  });
   joinRoomInput.addEventListener('input', updateButtons);
   function submitRoomFromInputs() {
     if (!usernameInput.value.trim()) return;
@@ -700,6 +763,17 @@ async function initializeRemote() {
   socket.on('play-video', ({ timestamp, updatedAt }) => setPlayback('playing', timestamp, updatedAt));
   socket.on('pause-video', ({ timestamp, updatedAt }) => setPlayback('paused', timestamp, updatedAt));
   socket.on('seek-video', ({ timestamp, updatedAt }) => setPlayback(playback.status, timestamp, updatedAt));
+  socket.on('sync-playback-state', ({ roomId, status, timestamp, updatedAt }) => {
+    if (
+      (roomId !== currentRoom && roomId !== joiningRoomId)
+      || !['playing', 'paused'].includes(status)
+      || !Number.isFinite(timestamp)
+      || timestamp < 0
+    ) {
+      return;
+    }
+    setPlayback(status, timestamp, updatedAt);
+  });
   socket.on('update-host', ({ newHost }) => { currentHost = newHost; });
   socket.on('room-users', ({ users, host }) => {
     currentHost = host;

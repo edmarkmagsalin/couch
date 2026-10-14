@@ -18,13 +18,171 @@ app.get('/health', (_request, response) => {
 // In-memory state store now holds video state AND recent chat history
 const roomStates = {}; 
 const emptyRoomTimers = {};
+const roomPlaybackAnnouncementTimers = {};
 const ROOM_RECONNECT_GRACE_MS = 60 * 1000;
+const ROOM_PLAYBACK_ANNOUNCEMENT_INTERVAL_MS = 5 * 60 * 1000;
+const PLAYBACK_STATE_REQUEST_TIMEOUT_MS = 5000;
+
+function formatPlaybackTimestamp(seconds) {
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+  const secondsText = String(remainingSeconds).padStart(2, '0');
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${secondsText}`
+    : `${minutes}:${secondsText}`;
+}
 
 function getRoomUserList(room) {
   const usernames = [...new Set(room.users.map(user => user.username))];
   const hostIndex = usernames.indexOf(room.host);
   if (hostIndex > 0) usernames.unshift(usernames.splice(hostIndex, 1)[0]);
   return usernames;
+}
+
+function getCurrentRoomVideoState(room) {
+  const video = room.video;
+  const elapsed = video.status === 'playing'
+    ? Math.max(0, Date.now() - video.updatedAt) / 1000
+    : 0;
+  return {
+    ...video,
+    timestamp: Math.max(0, video.timestamp + elapsed)
+  };
+}
+
+function requestExtensionPlaybackState(roomId, extension) {
+  return new Promise((resolve) => {
+    io.to(extension.socketId).timeout(PLAYBACK_STATE_REQUEST_TIMEOUT_MS).emit(
+      'request-playback-state',
+      { roomId },
+      (error, responses = []) => {
+        const state = responses[0];
+        const isAvailable = !error
+          && state?.available === true
+          && ['playing', 'paused'].includes(state.status)
+          && Number.isFinite(state.timestamp)
+          && state.timestamp >= 0;
+        resolve({
+          socketId: extension.socketId,
+          username: extension.username,
+          status: isAvailable ? state.status : null,
+          timestamp: isAvailable ? state.timestamp : null
+        });
+      }
+    );
+  });
+}
+
+async function syncJoiningUserWithHost(roomId, room, joiningSocketId) {
+  const host = room.host;
+  const extensions = room.users.filter(user => (
+    user.clientType === 'extension'
+    && user.username === host
+    && user.socketId !== joiningSocketId
+    && io.sockets.sockets.has(user.socketId)
+  ));
+  if (extensions.length === 0) return;
+
+  const requestStartedAt = Date.now();
+  const states = await Promise.all(
+    extensions.map(extension => requestExtensionPlaybackState(roomId, extension))
+  );
+  if (
+    roomStates[roomId] !== room
+    || room.host !== host
+    || room.video.updatedAt > requestStartedAt
+    || !room.users.some(user => user.socketId === joiningSocketId)
+  ) {
+    return;
+  }
+
+  const currentHostExtensions = new Set(room.users
+    .filter(user => user.clientType === 'extension' && user.username === host)
+    .map(user => user.socketId));
+  const hostState = states.find(state => (
+    currentHostExtensions.has(state.socketId)
+    && state.status
+    && Number.isFinite(state.timestamp)
+  ));
+  if (!hostState) return;
+
+  const state = {
+    status: hostState.status,
+    timestamp: hostState.timestamp,
+    updatedAt: Date.now()
+  };
+  room.video = state;
+  io.to(joiningSocketId).emit('sync-playback-state', { roomId, ...state });
+}
+
+async function announceRoomPlaybackPositions(roomId) {
+  const room = roomStates[roomId];
+  if (!room) return;
+
+  const extensions = room.users.filter(user => user.clientType === 'extension');
+  if (extensions.length === 0) return;
+
+  const playbackStates = await Promise.all(
+    extensions.map(extension => requestExtensionPlaybackState(roomId, extension))
+  );
+  if (roomStates[roomId] !== room) return;
+
+  const currentExtensions = room.users.filter(user => user.clientType === 'extension');
+  if (currentExtensions.length === 0) return;
+  const currentExtensionSocketIds = new Set(currentExtensions.map(user => user.socketId));
+  const playbackByUsername = new Map();
+  for (const state of playbackStates) {
+    if (
+      currentExtensionSocketIds.has(state.socketId)
+      && state.timestamp !== null
+      && !playbackByUsername.has(state.username)
+    ) {
+      playbackByUsername.set(state.username, state.timestamp);
+    }
+  }
+
+  const usernames = [...new Set(currentExtensions.map(user => user.username))];
+  const hostIndex = usernames.indexOf(room.host);
+  if (hostIndex > 0) usernames.unshift(usernames.splice(hostIndex, 1)[0]);
+  const participants = usernames.map(username => {
+    const timestamp = playbackByUsername.get(username);
+    return {
+      username,
+      isHost: username === room.host,
+      position: timestamp === undefined ? 'unavailable' : formatPlaybackTimestamp(timestamp)
+    };
+  });
+  const announcement = participants.map(({ username, isHost, position }) => (
+    `${username}${isHost ? ' (host)' : ''}: ${position}`
+  )).join('\n');
+  const message = {
+    sender: 'System',
+    text: `Status check every 5 mins\n${announcement}`,
+    type: 'playback-position-announcement',
+    highlightedUsernames: usernames,
+    participants,
+    time: Date.now()
+  };
+
+  if (room.chatHistory.length >= 50) room.chatHistory.shift();
+  room.chatHistory.push(message);
+  io.in(roomId).emit('new-message', message);
+}
+
+function scheduleRoomPlaybackAnnouncement(roomId) {
+  if (roomPlaybackAnnouncementTimers[roomId]) return;
+  roomPlaybackAnnouncementTimers[roomId] = setTimeout(() => {
+    delete roomPlaybackAnnouncementTimers[roomId];
+    const room = roomStates[roomId];
+    if (!room) return;
+
+    scheduleRoomPlaybackAnnouncement(roomId);
+    announceRoomPlaybackPositions(roomId).catch(error => {
+      console.error(`Could not announce playback positions for room ${roomId}:`, error);
+    });
+  }, ROOM_PLAYBACK_ANNOUNCEMENT_INTERVAL_MS);
 }
 
 io.on('connection', (socket) => {
@@ -81,12 +239,20 @@ io.on('connection', (socket) => {
       });
       
       const joinMessage = participantType === 'extension'
-        ? { sender: 'System', text: `${username} joined the party.`, time: Date.now() }
+        ? {
+            sender: 'System',
+            text: `${username} joined the party.`,
+            highlightedUsernames: [username],
+            time: Date.now()
+          }
         : null;
       if (joinMessage) roomStates[roomId].chatHistory.push(joinMessage);
 
       // Send current room state to the joining user
-      socket.emit('sync-room', roomStates[roomId]);
+      socket.emit('sync-room', {
+        ...roomStates[roomId],
+        video: getCurrentRoomVideoState(roomStates[roomId])
+      });
 
       // Broadcast the join message ONLY to other existing members in the room
       if (joinMessage) socket.to(roomId).emit('new-message', joinMessage);
@@ -94,7 +260,10 @@ io.on('connection', (socket) => {
       // If already joined, just re-sync state without adding a duplicate system message
       const participant = roomStates[roomId].users.find(user => user.socketId === socket.id);
       participant.clientType = clientType === 'remote' ? 'remote' : 'extension';
-      socket.emit('sync-room', roomStates[roomId]);
+      socket.emit('sync-room', {
+        ...roomStates[roomId],
+        video: getCurrentRoomVideoState(roomStates[roomId])
+      });
     }
 
     const participant = roomStates[roomId].users.find(user => user.socketId === socket.id);
@@ -109,10 +278,14 @@ io.on('connection', (socket) => {
       }
     }
 
+    scheduleRoomPlaybackAnnouncement(roomId);
     broadcastRoomUsers(roomId);
     if (typeof callback === 'function') {
       callback({ success: true, host: roomStates[roomId].host });
     }
+    syncJoiningUserWithHost(roomId, roomStates[roomId], socket.id).catch(error => {
+      console.error(`Could not sync joining user with host playback in room ${roomId}:`, error);
+    });
   });
   
   // Helper function to handle user removal, host reassignment, and room deletion
@@ -137,6 +310,8 @@ io.on('connection', (socket) => {
         if (roomStates[roomId]?.users.length === 0) {
           delete roomStates[roomId];
           delete emptyRoomTimers[roomId];
+          clearTimeout(roomPlaybackAnnouncementTimers[roomId]);
+          delete roomPlaybackAnnouncementTimers[roomId];
           console.log(`Room ${roomId} expired after the reconnect grace period.`);
         }
       }, ROOM_RECONNECT_GRACE_MS);
@@ -154,6 +329,7 @@ io.on('connection', (socket) => {
         const systemMessage = {
           sender: 'System',
           text: `${departingUser.username} left. ${room.host} is now the room host.`,
+          highlightedUsernames: [departingUser.username, room.host],
           time: Date.now()
         };
         room.chatHistory.push(systemMessage);
@@ -167,6 +343,7 @@ io.on('connection', (socket) => {
         const systemMessage = {
           sender: 'System',
           text: `${departingUser.username} left the party.`,
+          highlightedUsernames: [departingUser.username],
           time: Date.now()
         };
         room.chatHistory.push(systemMessage);
@@ -257,6 +434,31 @@ io.on('connection', (socket) => {
     );
   });
 
+  socket.on('request-room-playback-state', ({ roomId }, callback) => {
+    if (typeof callback !== 'function') return;
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    if (!room || participant?.clientType !== 'extension') {
+      callback({ success: false, message: 'Join a room from the extension before requesting playback state.' });
+      return;
+    }
+
+    const now = Date.now();
+    const timestamp = room.video.timestamp + (
+      room.video.status === 'playing'
+        ? Math.max(0, now - room.video.updatedAt) / 1000
+        : 0
+    );
+    callback({
+      success: true,
+      state: {
+        status: room.video.status,
+        timestamp,
+        updatedAt: now
+      }
+    });
+  });
+
   // --- VIDEO EVENTS ---
   socket.on('play-video', ({ roomId, timestamp }, callback) => {
     if (!roomStates[roomId]) return; // Safety check for missing room state
@@ -296,6 +498,7 @@ io.on('connection', (socket) => {
     const systemMessage = {
       sender: 'System',
       text: `${participant.username} is playing "${trimmedTitle}".`,
+      highlightedUsernames: [participant.username],
       time: Date.now()
     };
 
@@ -325,6 +528,7 @@ io.on('connection', (socket) => {
     const systemMessage = {
       sender: 'System',
       text: `${participant.username} ${actionText} at ${timestampText}.`,
+      highlightedUsernames: [participant.username],
       time: Date.now()
     };
 

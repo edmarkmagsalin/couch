@@ -2,6 +2,7 @@ async function initializeCouch() {
 // 1. Setup Variables
 const socket = io('http://localhost:3000');
 let isRemoteUpdate = false;
+const VIDEO_ACTION_ANNOUNCEMENT_DELAY_MS = 1000;
 let myUsername = '';
 let currentRoom = null; // Starts null! We are in the lobby.
 let currentHost = null; // Track current room host
@@ -14,6 +15,11 @@ const chatHistoryClearedAtByRoom = {};
 function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8);
 }
+
+function generateUsername() {
+  return `Guest-${Math.random().toString(36).substring(2, 7)}`;
+}
+
 // 2. Video Hijacking Logic
 let activeVideo = null;
 
@@ -52,6 +58,12 @@ let hookedVideo = null;
 let pendingVideoState = null;
 let lastAnnouncedMediaKey = null;
 let remoteSeekTarget = null;
+const pendingVideoActionAnnouncements = new Set();
+
+function cancelPendingVideoActionAnnouncements() {
+  pendingVideoActionAnnouncements.forEach(clearTimeout);
+  pendingVideoActionAnnouncements.clear();
+}
 
 function getVideoTitle(video) {
   const elementTitle = video.getAttribute('title')?.trim();
@@ -108,6 +120,7 @@ function applyVideoState(video, state) {
 
 function hookVideo(video) {
   if (!video || video === hookedVideo) return;
+  cancelPendingVideoActionAnnouncements();
   hookedVideo = video;
   console.log('Watch Party: Video element found and hooked!');
   announceVideoVolume(video);
@@ -121,20 +134,34 @@ function hookVideo(video) {
     });
   }
 
+  function deferPlaybackAnnouncement(action) {
+    const roomId = currentRoom;
+    const username = myUsername;
+    const timestamp = video.currentTime;
+    const timer = setTimeout(() => {
+      pendingVideoActionAnnouncements.delete(timer);
+      if (roomId !== currentRoom) return;
+      socket.emit('video-action', { roomId, username, action, timestamp });
+    }, VIDEO_ACTION_ANNOUNCEMENT_DELAY_MS);
+    pendingVideoActionAnnouncements.add(timer);
+  }
+
   video.addEventListener('play', () => {
     if (!currentRoom || isRemoteUpdate || video !== hookedVideo) return;
     socket.emit('play-video', { roomId: currentRoom, timestamp: video.currentTime });
-    announceVideoAction('play');
+    deferPlaybackAnnouncement('play');
   });
 
   video.addEventListener('pause', () => {
     if (!currentRoom || isRemoteUpdate || video !== hookedVideo) return;
+    if (document.hidden) return;
     socket.emit('pause-video', { roomId: currentRoom, timestamp: video.currentTime });
-    announceVideoAction('pause');
+    deferPlaybackAnnouncement('pause');
   });
 
   video.addEventListener('seeked', () => {
     if (!currentRoom || video !== hookedVideo) return;
+    cancelPendingVideoActionAnnouncements();
     if (remoteSeekTarget?.video === video) {
       const isRemoteSeek = Math.abs(video.currentTime - remoteSeekTarget.timestamp) <= 0.5;
       remoteSeekTarget = null;
@@ -166,6 +193,39 @@ document.addEventListener('playing', (event) => {
   activeVideo = event.target;
   hookVideo(activeVideo);
 }, true);
+
+let wasPageHidden = document.hidden;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    wasPageHidden = true;
+    return;
+  }
+  if (!wasPageHidden) return;
+  wasPageHidden = false;
+
+  const roomId = currentRoom;
+  const video = hookedVideo;
+  if (!roomId || !video || !socket.connected) return;
+
+  socket.timeout(6000).emit('request-room-playback-state', { roomId }, (error, result) => {
+    if (roomId !== currentRoom || video !== hookedVideo) return;
+    if (error) {
+      console.error('Could not restore playback after returning to the video tab:', error);
+      return;
+    }
+    if (
+      !result?.success
+      || !['playing', 'paused'].includes(result.state?.status)
+      || !Number.isFinite(result.state.timestamp)
+      || result.state.timestamp < 0
+    ) {
+      console.error('The room returned an invalid playback state while restoring the video tab.');
+      return;
+    }
+
+    applyVideoState(video, result.state);
+  });
+});
 
 setInterval(() => hookVideo(findVideoElement()), 500);
 
@@ -555,7 +615,34 @@ function createSenderLabel(sender, isHost) {
   return wrapper;
 }
 
-function appendMessage(sender, text, time = Date.now()) {
+function appendTextWithHighlightedUsernames(element, text, usernames) {
+  element.replaceChildren();
+  const alternatives = [...new Set(usernames.filter(username => typeof username === 'string' && username))]
+    .sort((first, second) => second.length - first.length)
+    .map(username => username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (alternatives.length === 0) {
+    element.textContent = text;
+    return;
+  }
+
+  const matcher = new RegExp(
+    `(^|[^\\p{L}\\p{N}_])(${alternatives.join('|')})(?=$|[^\\p{L}\\p{N}_])`,
+    'gu'
+  );
+  let cursor = 0;
+  for (const match of text.matchAll(matcher)) {
+    const usernameIndex = match.index + match[1].length;
+    element.append(document.createTextNode(text.slice(cursor, usernameIndex)));
+    const username = document.createElement('span');
+    username.className = 'system-username';
+    username.textContent = match[2];
+    element.append(username);
+    cursor = usernameIndex + match[2].length;
+  }
+  element.append(document.createTextNode(text.slice(cursor)));
+}
+
+function appendMessage(sender, text, time = Date.now(), announcement = null) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
   rowDiv.dataset.messageTime = String(time);
@@ -570,7 +657,36 @@ function appendMessage(sender, text, time = Date.now()) {
 
   if (sender === 'System') {
     rowDiv.classList.add('system');
-    messageContent.textContent = text;
+    if (announcement?.type === 'playback-position-announcement' && Array.isArray(announcement.participants)) {
+      messageContent.classList.add('playback-announcement');
+      const heading = document.createElement('span');
+      heading.className = 'playback-announcement-heading';
+      heading.textContent = "Status check every 5 mins";
+      messageContent.append(heading);
+
+      const participantList = document.createElement('span');
+      participantList.className = 'playback-announcement-participants';
+      for (const participant of announcement.participants) {
+        const participantName = document.createElement('span');
+        participantName.className = 'playback-announcement-name';
+        appendTextWithHighlightedUsernames(
+          participantName,
+          `${participant.username}${participant.isHost ? ' (host)' : ''}`,
+          [participant.username]
+        );
+        const participantPosition = document.createElement('span');
+        participantPosition.className = 'playback-announcement-position';
+        participantPosition.textContent = `⏱️ ${participant.position}`;
+        participantList.append(participantName, participantPosition);
+      }
+      messageContent.append(participantList);
+    } else {
+      appendTextWithHighlightedUsernames(
+        messageContent,
+        text,
+        announcement?.highlightedUsernames || []
+      );
+    }
     rowDiv.appendChild(messageContent);
   } else if (sender === 'You' || sender === myUsername) {
     rowDiv.classList.add('right');
@@ -646,21 +762,21 @@ const displayHostName = shadow.getElementById('display-host-name');
 
 const sessionReady = chrome.storage.local.get([
   'couch_username',
-  'couch_room',
   'couch_chat_history_cleared_at'
 ]).then((session) => {
-  myUsername = session.couch_username || localStorage.getItem('couch_username');
+  myUsername = typeof session.couch_username === 'string' && session.couch_username.trim()
+    ? session.couch_username
+    : generateUsername();
   if (session.couch_chat_history_cleared_at && typeof session.couch_chat_history_cleared_at === 'object') {
     Object.assign(chatHistoryClearedAtByRoom, session.couch_chat_history_cleared_at);
   }
   usernameInput.value = myUsername;
   updateLobbyButtons();
 
-  if (!session.couch_username) {
-    chrome.storage.local.set({ couch_username: myUsername });
-  }
-
-  return session.couch_room || null;
+  return Promise.all([
+    chrome.storage.local.set({ couch_username: myUsername }),
+    chrome.storage.local.remove('couch_room')
+  ]);
 });
 let roomRequestPending = false;
 let roomLoadingTimer = null;
@@ -697,6 +813,14 @@ function setRoomRequestPending(isPending) {
 }
 
 usernameInput.addEventListener('input', updateLobbyButtons);
+usernameInput.addEventListener('change', () => {
+  const typedName = usernameInput.value.trim();
+  if (!typedName) return;
+  myUsername = typedName;
+  chrome.storage.local.set({ couch_username: myUsername }).catch((error) => {
+    console.error('Could not save Couch username:', error);
+  });
+});
 joinRoomInput.addEventListener('input', updateLobbyButtons);
 function submitRoomFromInputs() {
   if (!usernameInput.value.trim()) return;
@@ -730,7 +854,9 @@ function captureAndSaveUsername() {
   if (!typedName) return;
 
   myUsername = typedName;
-  chrome.storage.local.set({ couch_username: myUsername });
+  chrome.storage.local.set({ couch_username: myUsername }).catch((error) => {
+    console.error('Could not save Couch username:', error);
+  });
 }
 
 function showRoom(roomId) {
@@ -760,7 +886,6 @@ function joinRoom(roomId, action = 'join') {
     if (response.success) {
       showRoom(roomId);
       joinRoomInput.value = '';
-      chrome.storage.local.set({ couch_room: roomId });
       return;
     }
 
@@ -802,7 +927,7 @@ const clearChatButton = shadow.getElementById('clear-chat-btn');
 function renderSyncedChatHistory(history) {
   history
     .filter(isVisibleAfterChatClear)
-    .forEach((message) => appendMessage(message.sender, message.text, message.time));
+    .forEach((message) => appendMessage(message.sender, message.text, message.time, message));
 }
 
 function isVisibleAfterChatClear(message) {
@@ -899,7 +1024,7 @@ chatForm.addEventListener('submit', (event) => {
 
 socket.on('new-message', (data) => {
   if (!isVisibleAfterChatClear(data)) return;
-  appendMessage(data.sender, data.text, data.time);
+  appendMessage(data.sender, data.text, data.time, data);
   highlightNewMessage();
 });
 socket.on('sync-room', (state) => {
@@ -928,6 +1053,19 @@ socket.on('sync-room', (state) => {
   renderSyncedChatHistory(state.chatHistory);
 });
 
+socket.on('sync-playback-state', ({ roomId, status, timestamp }) => {
+  if (
+    (roomId !== currentRoom && roomId !== joiningRoomId)
+    || !['playing', 'paused'].includes(status)
+    || !Number.isFinite(timestamp)
+    || timestamp < 0
+  ) {
+    return;
+  }
+
+  setPendingVideoState(status, timestamp);
+});
+
 socket.on('update-host', ({ newHost }) => {
   currentHost = newHost;
 
@@ -941,8 +1079,8 @@ socket.on('room-users', ({ users, host }) => {
   renderRoomUsers(users, host);
 });
 
-sessionReady.then((savedRoom) => {
-  if (savedRoom) joinRoom(savedRoom);
+sessionReady.catch((error) => {
+  console.error('Could not restore Couch username:', error);
 });
 }
 
