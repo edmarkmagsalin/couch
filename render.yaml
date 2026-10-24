@@ -2,5 +2,5 @@ services:
   - type: web
     name: couch-remote
     runtime: static
-    buildCommand: pnpm frontend:build
-    staticPublishPath: ./frontend/dist
+    buildCommand: pnpm remote:build
+    staticPublishPath: ./remote/dist

@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    root: 'frontend',
+    root: 'remote',
     define: {
       'import.meta.env.API_URL': JSON.stringify(API_URL)
     },

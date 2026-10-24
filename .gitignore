@@ -3,11 +3,11 @@ node_modules
 dist
 .env
 
-/frontend/video.mp4
-/frontend/public/
-/frontend/panel.html
-/frontend/panel.css
-/frontend/couch-shared.js
-/frontend/assets/couch.svg
+/remote/video.mp4
+/remote/public/
+/remote/panel.html
+/remote/panel.css
+/remote/couch-shared.js
+/remote/assets/couch.svg
 
 BACKLOG.md

@@ -15,21 +15,21 @@ This project is a lightweight browser-based watch-party tool for shared viewing 
 - Static web remote for room chat and playback control
 - Simple setup for manual or local installation
 
-## Couch Remote frontend
+## Couch Remote
 
-The `frontend/` directory is a static web app that connects to the Couch API URL configured as `API_URL`. It can be deployed to Render as a Static Site using the included `render.yaml` Blueprint. For local development and builds, set `API_URL` in the repository-root `.env` file. For Render, add `API_URL` to the Static Site's environment variables; Vite embeds its value during the build, so redeploy after changing it.
+The `remote/` directory is a static web app that connects to the Couch API URL configured as `API_URL`. It can be deployed to Render as a Static Site using the included `render.yaml` Blueprint. For local development and builds, set `API_URL` in the repository-root `.env` file. For Render, add `API_URL` to the Static Site's environment variables; Vite embeds its value during the build, so redeploy after changing it.
 
 The extension and remote each remember the last-used username; if none is saved, they generate a random Guest username. Join the same room code manually in both clients to see its chat and control playback. Add `?roomCode=ROOMCODE` to the current page URL to prefill the Room Code input in either client; users still need to press **Join**. While in a room, use **Share** in the room header to copy the current page URL with its room code, so recipients can open the link and join manually. The room header also has icon buttons to view connected users, clear this device's chat history, and exit the room; the room-code button copies the code. Room codes are not saved, and opening either client starts in the lobby. The remote remains joined after a temporary network interruption in the same open tab. When a user joins, Couch syncs them to the host extension's current playback time and state when available, falling back to the room's latest playback state. Use **Sync from extension** to refresh the remote's displayed playback position from the matching extension manually. Edit the current-time readout and press Enter to jump to a specific time; use `M:SS` or `H:MM:SS`. This page controls synchronized playback but does not host or play the source video.
 
 In room chat, send `/seek+M:SS` or `/seek+H:MM:SS` (for example, `/seek+1:00` or `/seek+1:20:59`) to seek synchronized playback without posting the command as a chat message. Quoted commands, such as `"/seek+1:00"`, are sent as ordinary chat messages.
 
-The frontend saves playback state and playhead locally, then restores them after a refresh without restoring or joining a room. Playback position is checkpointed while the page is open; a room's newer playback action takes precedence when available. Deploy the backend timestamp updates in `backend/server.js` to the API service so actions made while this page is closed can be identified as newer.
+The remote saves playback state and playhead locally, then restores them after a refresh without restoring or joining a room. Playback position is checkpointed while the page is open; a room's newer playback action takes precedence when available. Deploy the backend timestamp updates in `backend/server.js` to the API service so actions made while this page is closed can be identified as newer.
 
 On Couch Remote, the chat panel appears in a card above the playback controller. Drag the grip beneath the chat history to resize it; the surrounding layout adjusts to its height, which is saved locally. In the Chrome extension, the chat panel remains floating: drag the grip to resize it, then drag the panel near an edge to snap or dock it.
 
-The extension and remote page share the floating panel template and styles in `chrome-extension/panel.html` and `chrome-extension/panel.css`, plus emoji detection and timestamp formatting in `chrome-extension/couch-shared.js`. The frontend build copies these assets into Vite's public assets before building.
+The extension and remote page share the floating panel template and styles in `chrome-extension/panel.html` and `chrome-extension/panel.css`, plus emoji detection and timestamp formatting in `chrome-extension/couch-shared.js`. The remote build copies these assets into Vite's public assets before building.
 
-To run the frontend locally, run `pnpm frontend:dev` and open `http://localhost:4173`. Vite prepares the shared assets and automatically reloads frontend changes; stop the server with `Ctrl+C`. Run `pnpm frontend:build` to create the production site in `frontend/dist`.
+To run the remote locally, run `pnpm remote:dev` and open `http://localhost:4173`. Vite prepares the shared assets and automatically reloads remote changes; stop the server with `Ctrl+C`. Run `pnpm remote:build` to create the production site in `remote/dist`.
 
 ## Links
 
