@@ -6,3 +6,8 @@
 - If the request is ambiguous, use the verification step to identify the missing decision and ask a focused clarification question before coding.
 - After the user confirms and the changes are implemented, run the narrowest relevant validation first, then report what was changed and what was verified.
 - Keep responses concise and brief. Do not add extra background, long explanations, or unnecessary detail unless the user asks for it.
+- Keep in mind that this monorepo has 4 apps:
+  - Frontend - lives in `frontend` folder
+  - Chrome Extension - lives in `chrome-extension` folder
+  - Remote - lives in `remote` folder
+  - Backend - lives in `backend` folder
