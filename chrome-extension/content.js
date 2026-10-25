@@ -299,6 +299,7 @@ const panelMarkup = await panelResponse.text();
 shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('panel.css')}">${panelMarkup
   .replaceAll('__COUCH_LOGO_URL__', chrome.runtime.getURL('assets/couch.svg'))
   .replaceAll('__COUCH_LINK_URL__', chrome.runtime.getURL('assets/link.svg'))
+  .replaceAll('__COUCH_QR_URL__', chrome.runtime.getURL('assets/qr.svg'))
   .replaceAll('__COUCH_USERS_URL__', chrome.runtime.getURL('assets/users.svg'))
   .replaceAll('__COUCH_ERASER_URL__', chrome.runtime.getURL('assets/eraser.svg'))
   .replaceAll('__COUCH_LOGOUT_URL__', chrome.runtime.getURL('assets/logout.svg'))
@@ -552,6 +553,7 @@ const messageList = shadow.getElementById('messages');
 const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
 const roomUsersToggle = shadow.getElementById('room-users-toggle');
+const roomUsersCount = shadow.getElementById('room-users-count');
 const roomUsersPanel = shadow.getElementById('room-users-panel');
 const roomUsersList = shadow.getElementById('room-users-list');
 const messageMain = messageList.closest('main');
@@ -646,6 +648,25 @@ function appendTextWithHighlightedUsernames(element, text, usernames) {
   element.append(document.createTextNode(text.slice(cursor)));
 }
 
+function createPlaybackSyncControl(username, isCompact = false) {
+  const control = document.createElement('span');
+  control.className = 'playback-sync-control';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'playback-sync-button';
+  button.dataset.playbackSyncTarget = username;
+  button.textContent = isCompact ? 'Sync' : `Sync everyone to ${username}`;
+  button.setAttribute('aria-label', `Sync everyone to ${username}`);
+  button.title = `Sync everyone to ${username}`;
+  control.append(button);
+
+  const feedback = document.createElement('span');
+  feedback.className = 'playback-sync-feedback';
+  feedback.setAttribute('role', 'status');
+  control.append(feedback);
+  return control;
+}
+
 function appendMessage(sender, text, time = Date.now(), announcement = null) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
@@ -661,11 +682,12 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
 
   if (sender === 'System') {
     rowDiv.classList.add('system');
+    if (announcement?.syncTargetUsername) rowDiv.classList.add('has-playback-sync');
     if (announcement?.type === 'playback-position-announcement' && Array.isArray(announcement.participants)) {
       messageContent.classList.add('playback-announcement');
       const heading = document.createElement('span');
       heading.className = 'playback-announcement-heading';
-      heading.textContent = "Status check every 5 mins";
+      heading.textContent = announcement.heading || 'Status check every 5 mins';
       messageContent.append(heading);
 
       const participantList = document.createElement('span');
@@ -684,6 +706,9 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
         participantList.append(participantName, participantPosition);
       }
       messageContent.append(participantList);
+      if (typeof announcement.syncTargetUsername === 'string' && announcement.syncTargetUsername) {
+        messageContent.append(createPlaybackSyncControl(announcement.syncTargetUsername));
+      }
     } else {
       appendTextWithHighlightedUsernames(
         messageContent,
@@ -706,6 +731,10 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
     rowDiv.appendChild(messageContent);
   }
 
+  if (announcement?.type === 'playback-position-announcement' && announcement.syncTargetUsername) {
+    compactRow.append(createPlaybackSyncControl(announcement.syncTargetUsername, true));
+  }
+
   messageList.appendChild(rowDiv);
   compactMessages.appendChild(compactRow);
 
@@ -725,7 +754,11 @@ function clearChatHistory() {
 
 function renderRoomUsers(users, host) {
   roomUsersList.replaceChildren();
-  for (const username of users) {
+  const uniqueUsers = [...new Set(users)];
+  roomUsersCount.textContent = `(${uniqueUsers.length})`;
+  roomUsersToggle.title = `Users (${uniqueUsers.length})`;
+  roomUsersToggle.setAttribute('aria-label', `Users (${uniqueUsers.length})`);
+  for (const username of uniqueUsers) {
     const item = document.createElement('li');
     item.textContent = username === host ? `${username} (host)` : username;
     roomUsersList.append(item);
@@ -770,6 +803,10 @@ const lobbyView = shadow.getElementById('lobby');
 const chatContainer = shadow.getElementById('chat-container');
 const displayRoomId = shadow.getElementById('display-room-id');
 const shareRoomButton = shadow.getElementById('share-room-btn');
+const showRemoteQrButton = shadow.getElementById('show-remote-qr-btn');
+const remoteQrDialog = shadow.getElementById('remote-qr-dialog');
+const remoteQrCanvas = shadow.getElementById('remote-qr-canvas');
+const remoteQrStatus = shadow.getElementById('remote-qr-status');
 const joinRoomInput = shadow.getElementById('join-room-input');
 const joinRoomBtn = shadow.getElementById('join-room-btn');
 const joinRoomForm = shadow.getElementById('join-room-form');
@@ -884,6 +921,7 @@ function captureAndSaveUsername() {
 function showRoom(roomId) {
   currentRoom = roomId;
   joiningRoomId = null;
+  showRemoteQrButton.disabled = false;
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
   chatContainer.style.display = isCompactView ? 'none' : 'flex';
@@ -983,9 +1021,11 @@ leaveRoomBtn.addEventListener('click', () => {
 
   clearChatHistory();
   roomUsersList.replaceChildren();
+  renderRoomUsers([], null);
   roomUsersPanel.hidden = true;
   roomUsersToggle.setAttribute('aria-expanded', 'false');
   currentRoom = null;
+  showRemoteQrButton.disabled = true;
   chrome.storage.local.remove('couch_room');
   updateLobbyButtons();
 
@@ -1000,12 +1040,75 @@ const timestampBtn = shadow.getElementById('timestamp-btn');
 
 // --- FEATURE: SHARE VIDEO TIMESTAMP ---
 timestampBtn.addEventListener('click', () => {
-  const video = findVideoElement();
-  const timeString = CouchShared.formatTimestamp(video?.currentTime || 0);
-  const messageText = `⏱️ ${timeString}`;
-
-  emitLocalChatMessage(messageText);
+  if (!currentRoom || !socket.connected) return;
+  const roomId = currentRoom;
+  socket.timeout(6000).emit('check-room-playback', { roomId }, (error, result) => {
+    if (roomId !== currentRoom) return;
+    if (error || !result?.success) {
+      appendMessage(
+        'System',
+        error
+          ? 'Could not check playback times. Please try again.'
+          : result?.message || 'Could not check playback times. Please try again.',
+        Date.now()
+      );
+    }
+  });
 });
+
+showRemoteQrButton.addEventListener('click', async () => {
+  if (!currentRoom) return;
+
+  const remoteUrl = new URL('https://couch-remote.onrender.com/');
+  remoteUrl.searchParams.set('username', myUsername);
+  remoteUrl.searchParams.set('roomCode', currentRoom);
+  remoteQrStatus.textContent = 'Generating QR code…';
+  remoteQrDialog.showModal();
+
+  try {
+    await globalThis.CouchQrCode.toCanvas(remoteQrCanvas, remoteUrl.toString(), {
+      width: 224,
+      margin: 2,
+      errorCorrectionLevel: 'Q'
+    });
+    remoteQrStatus.textContent = `Scan to open Couch Remote as ${myUsername} and join room ${currentRoom}.`;
+  } catch (error) {
+    console.error('Could not generate Couch Remote QR code:', error);
+    remoteQrStatus.textContent = 'Could not generate the QR code. Please try again.';
+  }
+});
+shadow.getElementById('remote-qr-close').addEventListener('click', () => {
+  remoteQrDialog.close();
+});
+
+function handlePlaybackSyncClick(event) {
+  const button = event.target.closest('button[data-playback-sync-target]');
+  if (!button || button.disabled || !currentRoom || !socket.connected) return;
+
+  const roomId = currentRoom;
+  button.disabled = true;
+  const feedback = button.parentElement.querySelector('.playback-sync-feedback');
+  feedback.textContent = 'Syncing…';
+  socket.timeout(6000).emit('sync-room-playback-to-user', {
+    roomId,
+    username: button.dataset.playbackSyncTarget
+  }, (error, result) => {
+    if (roomId !== currentRoom || !button.isConnected) return;
+    if (error || !result?.success) {
+      button.disabled = false;
+      feedback.textContent = error
+        ? 'Sync request timed out. Please try again.'
+        : result?.message || 'Could not sync playback. Please try again.';
+      return;
+    }
+
+    button.textContent = 'Synced';
+    button.setAttribute('aria-label', `Playback synced to ${button.dataset.playbackSyncTarget}`);
+    feedback.textContent = '';
+  });
+}
+messageList.addEventListener('click', handlePlaybackSyncClick);
+compactMessages.addEventListener('click', handlePlaybackSyncClick);
 
 let copyFeedbackTimer = null;
 

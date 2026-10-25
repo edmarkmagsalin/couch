@@ -22,6 +22,7 @@ const roomPlaybackAnnouncementTimers = {};
 const ROOM_RECONNECT_GRACE_MS = 60 * 1000;
 const ROOM_PLAYBACK_ANNOUNCEMENT_INTERVAL_MS = 5 * 60 * 1000;
 const PLAYBACK_STATE_REQUEST_TIMEOUT_MS = 5000;
+const PLAYBACK_POSITION_DISCREPANCY_THRESHOLD_SECONDS = 1;
 
 function formatPlaybackTimestamp(seconds) {
   const totalSeconds = Math.floor(seconds);
@@ -117,58 +118,91 @@ async function syncJoiningUserWithHost(roomId, room, joiningSocketId) {
   io.to(joiningSocketId).emit('sync-playback-state', { roomId, ...state });
 }
 
-async function announceRoomPlaybackPositions(roomId) {
-  const room = roomStates[roomId];
-  if (!room) return;
-
+async function getRoomPlaybackPositions(roomId, room) {
   const extensions = room.users.filter(user => user.clientType === 'extension');
-  if (extensions.length === 0) return;
-
   const playbackStates = await Promise.all(
     extensions.map(extension => requestExtensionPlaybackState(roomId, extension))
   );
-  if (roomStates[roomId] !== room) return;
+  if (roomStates[roomId] !== room) return null;
 
-  const currentExtensions = room.users.filter(user => user.clientType === 'extension');
-  if (currentExtensions.length === 0) return;
-  const currentExtensionSocketIds = new Set(currentExtensions.map(user => user.socketId));
+  const currentExtensionSocketIds = new Set(room.users
+    .filter(user => user.clientType === 'extension')
+    .map(user => user.socketId));
   const playbackByUsername = new Map();
   for (const state of playbackStates) {
     if (
       currentExtensionSocketIds.has(state.socketId)
+      && state.status
       && state.timestamp !== null
-      && !playbackByUsername.has(state.username)
     ) {
-      playbackByUsername.set(state.username, state.timestamp);
+      const currentState = playbackByUsername.get(state.username);
+      if (!currentState || state.timestamp < currentState.timestamp) {
+        playbackByUsername.set(state.username, {
+          status: state.status,
+          timestamp: state.timestamp
+        });
+      }
     }
   }
 
-  const usernames = [...new Set(currentExtensions.map(user => user.username))];
+  const usernames = [...new Set(room.users.map(user => user.username))];
   const hostIndex = usernames.indexOf(room.host);
   if (hostIndex > 0) usernames.unshift(usernames.splice(hostIndex, 1)[0]);
   const participants = usernames.map(username => {
-    const timestamp = playbackByUsername.get(username);
+    const state = playbackByUsername.get(username);
     return {
       username,
       isHost: username === room.host,
-      position: timestamp === undefined ? 'unavailable' : formatPlaybackTimestamp(timestamp)
+      position: state ? formatPlaybackTimestamp(state.timestamp) : 'unavailable'
     };
   });
-  const announcement = participants.map(({ username, isHost, position }) => (
+
+  return { participants, playbackByUsername };
+}
+
+function getFurthestBehind(playbackByUsername) {
+  const availableStates = [...playbackByUsername.entries()];
+  if (availableStates.length < 2) return null;
+
+  const furthestBehind = availableStates.reduce((furthest, current) => (
+    current[1].timestamp < furthest[1].timestamp ? current : furthest
+  ));
+  const furthestAhead = availableStates.reduce((furthest, current) => (
+    current[1].timestamp > furthest[1].timestamp ? current : furthest
+  ));
+
+  return furthestAhead[1].timestamp - furthestBehind[1].timestamp
+    > PLAYBACK_POSITION_DISCREPANCY_THRESHOLD_SECONDS
+    ? { username: furthestBehind[0], ...furthestBehind[1] }
+    : null;
+}
+
+async function announceRoomPlaybackPositions(roomId, isOnDemand = false) {
+  const room = roomStates[roomId];
+  if (!room) return false;
+
+  const playback = await getRoomPlaybackPositions(roomId, room);
+  if (!playback) return false;
+  const furthestBehind = getFurthestBehind(playback.playbackByUsername);
+  const heading = isOnDemand ? 'Playback time check' : 'Status check every 5 mins';
+  const announcement = playback.participants.map(({ username, isHost, position }) => (
     `${username}${isHost ? ' (host)' : ''}: ${position}`
   )).join('\n');
   const message = {
     sender: 'System',
-    text: `Status check every 5 mins\n${announcement}`,
+    text: `${heading}\n${announcement}`,
     type: 'playback-position-announcement',
-    highlightedUsernames: usernames,
-    participants,
+    heading,
+    highlightedUsernames: playback.participants.map(participant => participant.username),
+    participants: playback.participants,
+    syncTargetUsername: furthestBehind?.username || null,
     time: Date.now()
   };
 
   if (room.chatHistory.length >= 50) room.chatHistory.shift();
   room.chatHistory.push(message);
   io.in(roomId).emit('new-message', message);
+  return true;
 }
 
 function scheduleRoomPlaybackAnnouncement(roomId) {
@@ -457,6 +491,90 @@ io.on('connection', (socket) => {
         updatedAt: now
       }
     });
+  });
+
+  socket.on('check-room-playback', ({ roomId }, callback) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    if (!room || !participant) {
+      if (typeof callback === 'function') {
+        callback({ success: false, message: 'Join a room before checking playback times.' });
+      }
+      return;
+    }
+
+    announceRoomPlaybackPositions(roomId, true)
+      .then(success => {
+        if (typeof callback === 'function') callback({
+          success,
+          message: success ? undefined : 'The room changed before playback times could be checked.'
+        });
+      })
+      .catch(error => {
+        console.error(`Could not check playback positions for room ${roomId}:`, error);
+        if (typeof callback === 'function') {
+          callback({ success: false, message: 'Could not check playback times. Please try again.' });
+        }
+      });
+  });
+
+  socket.on('sync-room-playback-to-user', async ({ roomId, username }, callback) => {
+    const room = roomStates[roomId];
+    const participant = room?.users.find(user => user.socketId === socket.id);
+    if (!room || !participant || typeof username !== 'string') {
+      if (typeof callback === 'function') {
+        callback({ success: false, message: 'Join a room before syncing playback.' });
+      }
+      return;
+    }
+
+    const requestStartedAt = Date.now();
+    try {
+      const playback = await getRoomPlaybackPositions(roomId, room);
+      if (
+        !playback
+        || room.video.updatedAt > requestStartedAt
+        || !room.users.some(user => user.socketId === socket.id)
+      ) {
+        if (typeof callback === 'function') {
+          callback({ success: false, message: 'The room changed. Check playback times and try again.' });
+        }
+        return;
+      }
+
+      const furthestBehind = getFurthestBehind(playback.playbackByUsername);
+      if (!furthestBehind || furthestBehind.username !== username) {
+        if (typeof callback === 'function') {
+          callback({ success: false, message: 'Playback times changed. Check them again before syncing.' });
+        }
+        return;
+      }
+
+      const updatedAt = Date.now();
+      room.video = {
+        status: 'playing',
+        timestamp: furthestBehind.timestamp,
+        updatedAt
+      };
+      io.in(roomId).emit('sync-playback-state', { roomId, ...room.video });
+
+      const message = {
+        sender: 'System',
+        text: `Everyone synced to ${username} and started playback at ${formatPlaybackTimestamp(furthestBehind.timestamp)}.`,
+        highlightedUsernames: [username],
+        time: updatedAt
+      };
+      if (room.chatHistory.length >= 50) room.chatHistory.shift();
+      room.chatHistory.push(message);
+      io.in(roomId).emit('new-message', message);
+
+      if (typeof callback === 'function') callback({ success: true });
+    } catch (error) {
+      console.error(`Could not sync room playback for room ${roomId}:`, error);
+      if (typeof callback === 'function') {
+        callback({ success: false, message: 'Could not sync playback. Please try again.' });
+      }
+    }
   });
 
   // --- VIDEO EVENTS ---

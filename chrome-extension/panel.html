@@ -35,7 +35,8 @@
       <div class="room-header" style="display: flex; justify-content: flex-start; align-items: center; gap: 8px; padding: 8px; font-size: inherit;">
         <button id="display-room-id" class="btn small" type="button" title="Copy room code" aria-label="Copy room code">...</button>
         <button id="share-room-btn" class="btn small secondary icon-button" type="button" title="Copy room invite link" aria-label="Copy room invite link"><img src="__COUCH_LINK_URL__" alt="" aria-hidden="true"></button>
-        <button id="room-users-toggle" class="btn small secondary icon-button" type="button" title="Users" aria-label="Users" aria-expanded="false" aria-controls="room-users-panel"><img src="__COUCH_USERS_URL__" alt="" aria-hidden="true"></button>
+        <button id="show-remote-qr-btn" class="btn small secondary icon-button" type="button" title="Show remote QR code" aria-label="Show remote QR code" disabled><img src="__COUCH_QR_URL__" alt="" aria-hidden="true"></button>
+        <button id="room-users-toggle" class="btn small secondary icon-button" type="button" title="Users (0)" aria-label="Users (0)" aria-expanded="false" aria-controls="room-users-panel"><img src="__COUCH_USERS_URL__" alt="" aria-hidden="true"><span id="room-users-count">(0)</span></button>
         <button id="clear-chat-btn" class="btn small secondary icon-button" type="button" title="Clear chat history on this device" aria-label="Clear chat history on this device"><img src="__COUCH_ERASER_URL__" alt="" aria-hidden="true"></button>
         <button id="leave-room-btn" class="btn small tertiary icon-button" type="button" title="Exit room" aria-label="Exit room"><img src="__COUCH_LOGOUT_URL__" alt="" aria-hidden="true"></button>
         <div id="room-users-panel" class="room-users-panel" hidden>
@@ -92,5 +93,13 @@
     <div id="compact-view" title="Open Couch">
       <div id="compact-messages"></div>
     </div>
+    <dialog id="remote-qr-dialog" aria-labelledby="remote-qr-title">
+      <div class="remote-qr-content">
+        <h2 id="remote-qr-title">Join this room on Couch Remote</h2>
+        <canvas id="remote-qr-canvas" aria-label="QR code for Couch Remote"></canvas>
+        <p id="remote-qr-status" role="status" aria-live="polite"></p>
+        <button id="remote-qr-close" class="btn small secondary" type="button">Close</button>
+      </div>
+    </dialog>
   </section>
   <button id="edge-tab" type="button" title="Show Couch" aria-label="Show Couch"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g transform="rotate(270 12 12)"><path d="M12 19V5m-7 7 7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></button>

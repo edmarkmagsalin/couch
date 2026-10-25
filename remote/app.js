@@ -20,6 +20,7 @@ async function initializeRemote() {
     ${panelMarkup
       .replaceAll('__COUCH_LOGO_URL__', '/assets/couch.svg')
       .replaceAll('__COUCH_LINK_URL__', '/assets/link.svg')
+      .replaceAll('__COUCH_QR_URL__', '/assets/qr.svg')
       .replaceAll('__COUCH_USERS_URL__', '/assets/users.svg')
       .replaceAll('__COUCH_ERASER_URL__', '/assets/eraser.svg')
       .replaceAll('__COUCH_LOGOUT_URL__', '/assets/logout.svg')}
@@ -43,6 +44,7 @@ async function initializeRemote() {
   const roomLoading = shadow.getElementById('room-loading-message');
   const displayRoomId = shadow.getElementById('display-room-id');
   const roomUsersToggle = shadow.getElementById('room-users-toggle');
+  const roomUsersCount = shadow.getElementById('room-users-count');
   const roomUsersPanel = shadow.getElementById('room-users-panel');
   const roomUsersList = shadow.getElementById('room-users-list');
   const clearChatButton = shadow.getElementById('clear-chat-btn');
@@ -68,7 +70,8 @@ async function initializeRemote() {
   const volumeStatus = document.getElementById('remote-volume-status');
   const themeColor = document.querySelector('meta[name="theme-color"]');
 
-  let username = localStorage.getItem('couch_username')?.trim() || '';
+  const usernameFromUrl = new URLSearchParams(window.location.search).get('username')?.trim() || '';
+  let username = usernameFromUrl || localStorage.getItem('couch_username')?.trim() || '';
   if (!username) {
     username = `Guest-${Math.random().toString(36).substring(2, 7)}`;
     localStorage.setItem('couch_username', username);
@@ -301,6 +304,25 @@ async function initializeRemote() {
     element.append(document.createTextNode(text.slice(cursor)));
   }
 
+  function createPlaybackSyncControl(username, isCompact = false) {
+    const control = document.createElement('span');
+    control.className = 'playback-sync-control';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'playback-sync-button';
+    button.dataset.playbackSyncTarget = username;
+    button.textContent = isCompact ? 'Sync' : `Sync everyone to ${username}`;
+    button.setAttribute('aria-label', `Sync everyone to ${username}`);
+    button.title = `Sync everyone to ${username}`;
+    control.append(button);
+
+    const feedback = document.createElement('span');
+    feedback.className = 'playback-sync-feedback';
+    feedback.setAttribute('role', 'status');
+    control.append(feedback);
+    return control;
+  }
+
   function addMessage(message) {
     const row = document.createElement('li');
     row.className = 'message-row';
@@ -308,6 +330,7 @@ async function initializeRemote() {
     const isSystem = message.sender === 'System';
     const isOwnMessage = message.sender === 'You' || message.sender === username;
     row.classList.add(isSystem ? 'system' : isOwnMessage ? 'right' : 'left');
+    if (message.syncTargetUsername) row.classList.add('has-playback-sync');
 
     const content = document.createElement('span');
     content.className = 'message-content';
@@ -318,7 +341,7 @@ async function initializeRemote() {
         content.replaceChildren();
         const heading = document.createElement('span');
         heading.className = 'playback-announcement-heading';
-        heading.textContent = "Status check every 5 mins";
+        heading.textContent = message.heading || 'Status check every 5 mins';
         content.append(heading);
 
         const participantList = document.createElement('span');
@@ -337,6 +360,9 @@ async function initializeRemote() {
           participantList.append(participantName, participantPosition);
         }
         content.append(participantList);
+        if (typeof message.syncTargetUsername === 'string' && message.syncTargetUsername) {
+          content.append(createPlaybackSyncControl(message.syncTargetUsername));
+        }
       } else {
         appendTextWithHighlightedUsernames(content, message.text, message.highlightedUsernames || []);
       }
@@ -367,6 +393,9 @@ async function initializeRemote() {
     const compact = document.createElement('div');
     compact.className = 'compact-message';
     compact.textContent = `${message.sender}: ${message.text}`;
+    if (message.type === 'playback-position-announcement' && message.syncTargetUsername) {
+      compact.append(createPlaybackSyncControl(message.syncTargetUsername, true));
+    }
     compactMessages.append(compact);
     while (compactMessages.children.length > 2) compactMessages.firstElementChild.remove();
   }
@@ -430,6 +459,7 @@ async function initializeRemote() {
     messageList.replaceChildren();
     compactMessages.replaceChildren();
     roomUsersList.replaceChildren();
+    renderRoomUsers([], null);
     roomUsersPanel.hidden = true;
     roomUsersToggle.setAttribute('aria-expanded', 'false');
     displayRoomId.textContent = '...';
@@ -498,7 +528,11 @@ async function initializeRemote() {
 
   function renderRoomUsers(users, host) {
     roomUsersList.replaceChildren();
-    for (const roomUsername of users) {
+    const uniqueUsers = [...new Set(users)];
+    roomUsersCount.textContent = `(${uniqueUsers.length})`;
+    roomUsersToggle.title = `Users (${uniqueUsers.length})`;
+    roomUsersToggle.setAttribute('aria-label', `Users (${uniqueUsers.length})`);
+    for (const roomUsername of uniqueUsers) {
       const item = document.createElement('li');
       item.textContent = roomUsername === host ? `${roomUsername} (host)` : roomUsername;
       roomUsersList.append(item);
@@ -619,8 +653,46 @@ async function initializeRemote() {
     if (button && button !== timestampButton) sendChat(button.textContent);
   });
   timestampButton.addEventListener('click', () => {
-    sendChat(`⏱️ ${formatTime(currentTimestamp())}`);
+    if (!currentRoom || !isRoomJoined || !socket.connected) return;
+    const roomId = currentRoom;
+    syncPlaybackStatus.textContent = 'Checking playback times…';
+    socket.timeout(6000).emit('check-room-playback', { roomId }, (error, result) => {
+      if (roomId !== currentRoom) return;
+      syncPlaybackStatus.textContent = error
+        ? 'Could not check playback times. Please try again.'
+        : result?.success
+          ? 'Playback times announced in chat.'
+          : result?.message || 'Could not check playback times. Please try again.';
+    });
   });
+  function handlePlaybackSyncClick(event) {
+    const button = event.target.closest('button[data-playback-sync-target]');
+    if (!button || button.disabled || !currentRoom || !isRoomJoined || !socket.connected) return;
+
+    const roomId = currentRoom;
+    button.disabled = true;
+    const feedback = button.parentElement.querySelector('.playback-sync-feedback');
+    feedback.textContent = 'Syncing…';
+    socket.timeout(6000).emit('sync-room-playback-to-user', {
+      roomId,
+      username: button.dataset.playbackSyncTarget
+    }, (error, result) => {
+      if (roomId !== currentRoom || !button.isConnected) return;
+      if (error || !result?.success) {
+        button.disabled = false;
+        feedback.textContent = error
+          ? 'Sync request timed out. Please try again.'
+          : result?.message || 'Could not sync playback. Please try again.';
+        return;
+      }
+
+      button.textContent = 'Synced';
+      button.setAttribute('aria-label', `Playback synced to ${button.dataset.playbackSyncTarget}`);
+      feedback.textContent = '';
+    });
+  }
+  messageList.addEventListener('click', handlePlaybackSyncClick);
+  compactMessages.addEventListener('click', handlePlaybackSyncClick);
   themeToggle.addEventListener('click', () => {
     applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
   });

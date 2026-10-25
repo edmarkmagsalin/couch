@@ -186,11 +186,72 @@
       padding: 8px;
     }
 
+    #room-users-toggle {
+      width: auto;
+      min-width: 44px;
+      gap: 4px;
+    }
+
+    :host(.embedded) #show-remote-qr-btn {
+      display: none;
+    }
+
     .btn.icon-button img {
       display: block;
       width: 10px;
       height: 10px;
       filter: brightness(0) invert(1);
+    }
+
+    #room-users-count {
+      white-space: nowrap;
+    }
+
+    #remote-qr-dialog {
+      position: fixed;
+      inset: 50% auto auto 50%;
+      width: min(280px, calc(100vw - 32px));
+      max-width: none;
+      max-height: calc(100vh - 32px);
+      transform: translate(-50%, -50%);
+      padding: 16px;
+      border: 1px solid rgb(255 255 255 / 24%);
+      border-radius: 10px;
+      background: #151515;
+      color: white;
+      text-align: center;
+    }
+
+    #remote-qr-dialog::backdrop {
+      background: rgb(0 0 0 / 65%);
+    }
+
+    .remote-qr-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .remote-qr-content h2 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    #remote-qr-canvas {
+      width: 224px;
+      height: 224px;
+      max-width: 100%;
+      image-rendering: pixelated;
+      background: white;
+    }
+
+    #remote-qr-status {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
     }
 
     #leave-room-btn {
@@ -578,6 +639,10 @@
   opacity: 0.5;
 }
 
+.message-row.system.has-playback-sync {
+  opacity: 1;
+}
+
 .message-row.system .message-content {
   white-space: pre-line;
 }
@@ -611,6 +676,46 @@
 
 .playback-announcement-position {
   text-align: left;
+}
+
+.playback-sync-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 5px;
+  white-space: normal;
+}
+
+.playback-sync-button {
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 4px;
+  padding: 3px 7px;
+  background: rgb(255 255 255 / 12%);
+  color: inherit;
+  font: inherit;
+  font-style: normal;
+  cursor: pointer;
+}
+
+.playback-sync-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.playback-sync-feedback {
+  font-style: normal;
+}
+
+.compact-message .playback-sync-control {
+  display: inline-flex;
+  margin: 0 0 0 4px;
+  vertical-align: middle;
+}
+
+.compact-message .playback-sync-button {
+  padding: 2px 5px;
 }
 
 .system-username {
