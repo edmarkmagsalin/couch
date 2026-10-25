@@ -8,7 +8,6 @@ const sharedAssets = [
   ['chrome-extension/panel.css', 'remote/public/panel.css'],
   ['chrome-extension/assets/couch.svg', 'remote/public/assets/couch.svg'],
   ['chrome-extension/assets/link.svg', 'remote/public/assets/link.svg'],
-  ['chrome-extension/assets/qr.svg', 'remote/public/assets/qr.svg'],
   ['chrome-extension/assets/users.svg', 'remote/public/assets/users.svg'],
   ['chrome-extension/assets/eraser.svg', 'remote/public/assets/eraser.svg'],
   ['chrome-extension/assets/logout.svg', 'remote/public/assets/logout.svg']

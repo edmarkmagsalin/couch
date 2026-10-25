@@ -299,7 +299,6 @@ const panelMarkup = await panelResponse.text();
 shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('panel.css')}">${panelMarkup
   .replaceAll('__COUCH_LOGO_URL__', chrome.runtime.getURL('assets/couch.svg'))
   .replaceAll('__COUCH_LINK_URL__', chrome.runtime.getURL('assets/link.svg'))
-  .replaceAll('__COUCH_QR_URL__', chrome.runtime.getURL('assets/qr.svg'))
   .replaceAll('__COUCH_USERS_URL__', chrome.runtime.getURL('assets/users.svg'))
   .replaceAll('__COUCH_ERASER_URL__', chrome.runtime.getURL('assets/eraser.svg'))
   .replaceAll('__COUCH_LOGOUT_URL__', chrome.runtime.getURL('assets/logout.svg'))
@@ -774,6 +773,11 @@ function emitLocalChatMessage(text) {
   const trimmedText = String(text ?? '').trim();
   if (!trimmedText || !currentRoom) return;
 
+  if (trimmedText === '/remote') {
+    showRemoteQrCode();
+    return;
+  }
+
   const seekTimestamp = CouchShared.parseSeekCommand(trimmedText);
   if (seekTimestamp !== null) {
     pendingVideoState = { status: 'seeking', timestamp: seekTimestamp };
@@ -803,7 +807,6 @@ const lobbyView = shadow.getElementById('lobby');
 const chatContainer = shadow.getElementById('chat-container');
 const displayRoomId = shadow.getElementById('display-room-id');
 const shareRoomButton = shadow.getElementById('share-room-btn');
-const showRemoteQrButton = shadow.getElementById('show-remote-qr-btn');
 const remoteQrDialog = shadow.getElementById('remote-qr-dialog');
 const remoteQrCanvas = shadow.getElementById('remote-qr-canvas');
 const remoteQrStatus = shadow.getElementById('remote-qr-status');
@@ -921,7 +924,6 @@ function captureAndSaveUsername() {
 function showRoom(roomId) {
   currentRoom = roomId;
   joiningRoomId = null;
-  showRemoteQrButton.disabled = false;
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
   chatContainer.style.display = isCompactView ? 'none' : 'flex';
@@ -1025,7 +1027,6 @@ leaveRoomBtn.addEventListener('click', () => {
   roomUsersPanel.hidden = true;
   roomUsersToggle.setAttribute('aria-expanded', 'false');
   currentRoom = null;
-  showRemoteQrButton.disabled = true;
   chrome.storage.local.remove('couch_room');
   updateLobbyButtons();
 
@@ -1056,7 +1057,7 @@ timestampBtn.addEventListener('click', () => {
   });
 });
 
-showRemoteQrButton.addEventListener('click', async () => {
+async function showRemoteQrCode() {
   if (!currentRoom) return;
 
   const remoteUrl = new URL('https://couch-remote.onrender.com/');
@@ -1076,7 +1077,8 @@ showRemoteQrButton.addEventListener('click', async () => {
     console.error('Could not generate Couch Remote QR code:', error);
     remoteQrStatus.textContent = 'Could not generate the QR code. Please try again.';
   }
-});
+}
+
 shadow.getElementById('remote-qr-close').addEventListener('click', () => {
   remoteQrDialog.close();
 });

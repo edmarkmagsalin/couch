@@ -20,7 +20,6 @@ async function initializeRemote() {
     ${panelMarkup
       .replaceAll('__COUCH_LOGO_URL__', '/assets/couch.svg')
       .replaceAll('__COUCH_LINK_URL__', '/assets/link.svg')
-      .replaceAll('__COUCH_QR_URL__', '/assets/qr.svg')
       .replaceAll('__COUCH_USERS_URL__', '/assets/users.svg')
       .replaceAll('__COUCH_ERASER_URL__', '/assets/eraser.svg')
       .replaceAll('__COUCH_LOGOUT_URL__', '/assets/logout.svg')}
