@@ -69,13 +69,18 @@ async function initializeRemote() {
   const volumeStatus = document.getElementById('remote-volume-status');
   const themeColor = document.querySelector('meta[name="theme-color"]');
 
-  const usernameFromUrl = new URLSearchParams(window.location.search).get('username')?.trim() || '';
-  let username = usernameFromUrl || localStorage.getItem('couch_username')?.trim() || '';
+  const urlUsername = new URLSearchParams(window.location.search).get('username')?.trim() || '';
+  const urlRoomCode = new URLSearchParams(window.location.search).get('roomCode')?.trim().toLowerCase() || '';
+  let username = urlUsername || localStorage.getItem('couch_username')?.trim() || '';
   if (!username) {
     username = `Guest-${Math.random().toString(36).substring(2, 7)}`;
     localStorage.setItem('couch_username', username);
   }
-  const roomCodeFromUrl = new URLSearchParams(window.location.search).get('roomCode')?.trim().toLowerCase() || '';
+  const roomCodeFromUrl = urlRoomCode;
+  function maybeAutoJoinFromUrl() {
+    if (!urlUsername || !urlRoomCode || currentRoom || isRoomJoined || joiningRoomId) return;
+    submitRoomRequest(urlRoomCode, 'join');
+  }
   let currentRoom = null;
   let isRoomJoined = false;
   let currentHost = null;
@@ -773,6 +778,7 @@ async function initializeRemote() {
   socket.on('connect', () => {
     setConnection('Connected to Couch', 'connected');
     updateButtons();
+    maybeAutoJoinFromUrl();
     if (currentRoom) {
       const roomId = currentRoom;
       if (!username) {
