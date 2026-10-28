@@ -100,7 +100,6 @@
 .player-frame {
   position: relative;
   width: 100%;
-  overflow: hidden;
   aspect-ratio: 16 / 9;
   display: grid;
   place-items: center;
