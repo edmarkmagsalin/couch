@@ -63,6 +63,16 @@ async function initializeRemote() {
   const playbackToggle = document.getElementById('remote-toggle-playback');
   const syncPlaybackButton = document.getElementById('remote-sync-playback');
   const syncPlaybackStatus = document.getElementById('remote-sync-status');
+  let syncToastTimer = null;
+
+  function showSyncToast(message, timeoutMs = 2200) {
+    syncPlaybackStatus.textContent = message;
+    syncPlaybackStatus.classList.add('visible');
+    if (syncToastTimer) clearTimeout(syncToastTimer);
+    syncToastTimer = setTimeout(() => {
+      syncPlaybackStatus.classList.remove('visible');
+    }, timeoutMs);
+  }
   const volumeSlider = document.getElementById('remote-volume');
   const volumeValue = document.getElementById('remote-volume-value');
   const volumePresets = document.getElementById('remote-volume-presets');
@@ -216,9 +226,13 @@ async function initializeRemote() {
     if (!isEditingCurrentTime) currentTimeInput.value = formatTime(timestamp);
     const isPlaying = isRoomJoined && playback.status === 'playing';
     playbackStatusLabel.textContent = isPlaying ? 'Playing' : 'Paused';
-    playbackToggle.textContent = isPlaying ? 'Pause' : 'Play';
     playbackToggle.classList.toggle('is-secondary', isPlaying);
     playbackToggle.setAttribute('aria-label', isPlaying ? 'Pause playback' : 'Start playback');
+    playbackToggle.setAttribute('aria-pressed', String(isPlaying));
+    const iconMarkup = isPlaying
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5h3v14H8zm5 0h3v14h-3z" fill="currentColor"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+    playbackToggle.innerHTML = iconMarkup;
   }
 
   function seekTo(timestamp) {
@@ -662,11 +676,11 @@ async function initializeRemote() {
     syncPlaybackStatus.textContent = 'Checking playback times…';
     socket.timeout(6000).emit('check-room-playback', { roomId }, (error, result) => {
       if (roomId !== currentRoom) return;
-      syncPlaybackStatus.textContent = error
+      showSyncToast(error
         ? 'Could not check playback times. Please try again.'
         : result?.success
           ? 'Playback times announced in chat.'
-          : result?.message || 'Could not check playback times. Please try again.';
+          : result?.message || 'Could not check playback times. Please try again.');
     });
   });
   function handlePlaybackSyncClick(event) {
@@ -712,7 +726,7 @@ async function initializeRemote() {
     const roomId = currentRoom;
     const requestId = ++playbackSyncRequestId;
     isSyncingPlayback = true;
-    syncPlaybackStatus.textContent = 'Requesting current video time from the extension…';
+    showSyncToast('Requesting current video time from the extension…', 1800);
     updateButtons();
     socket.timeout(6000).emit('request-playback-state', { roomId }, (error, result) => {
       if (requestId !== playbackSyncRequestId || roomId !== currentRoom) return;
@@ -721,17 +735,17 @@ async function initializeRemote() {
       updateButtons();
 
       if (error) {
-        syncPlaybackStatus.textContent = 'The extension did not respond. Make sure Couch is open and try again.';
+        showSyncToast('The extension did not respond. Make sure Couch is open and try again.');
         return;
       }
       if (!result?.success) {
-        syncPlaybackStatus.textContent = result?.message || 'Could not sync from the extension.';
+        showSyncToast(result?.message || 'Could not sync from the extension.');
         return;
       }
 
       setPlayback(result.state.status, result.state.timestamp);
       const stateLabel = result.state.status === 'playing' ? 'playing' : 'paused';
-      syncPlaybackStatus.textContent = `Synced to ${formatTime(result.state.timestamp)} (${stateLabel}).`;
+      showSyncToast(`Synced to ${formatTime(result.state.timestamp)} (${stateLabel}).`);
     });
   }
   syncPlaybackButton.addEventListener('click', requestPlaybackSync);

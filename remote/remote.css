@@ -340,52 +340,139 @@ body {
   opacity: 0.48;
 }
 
-.sync-playback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
+.time-readout {
+  margin-bottom: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
-.sync-playback button {
+.sync-playback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  min-height: 40px;
-  padding: 8px 12px;
-  border: 1px solid var(--card-line);
-  border-radius: 999px;
-  background: var(--secondary-bg);
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 650;
   cursor: pointer;
 }
 
-.sync-playback button:not(:disabled):hover {
+.sync-playback-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.sync-playback-btn:not(:disabled):hover {
   border-color: rgba(229, 9, 20, 0.75);
   background: rgba(229, 9, 20, 0.12);
 }
 
-.sync-playback button:disabled {
+.sync-playback-btn:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
 
-.sync-playback p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.4;
-  text-align: right;
+#remote-sync-status {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 3;
+  display: block;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(12, 12, 14, 0.92);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font: 12px/1.4 sans-serif;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  transform: translateY(8px);
+  visibility: hidden;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
 }
 
-.transport-buttons {
+#remote-sync-status.visible {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.sync-playback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.playback-toggle,
+.reset-time-btn {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  margin-top: 16px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  box-shadow: none;
+  font-size: 0;
+  cursor: pointer;
 }
 
-.transport-buttons button:disabled {
+.playback-toggle svg,
+.reset-time-btn svg {
+  display: block;
+  width: 30px;
+  height: 30px;
+}
+
+.playback-toggle.is-secondary,
+.reset-time-btn.is-secondary {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sync-playback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.sync-playback-btn svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.sync-playback-btn:not(:disabled):hover,
+.playback-toggle:not(:disabled):hover,
+.reset-time-btn:not(:disabled):hover {
+  border-color: rgba(229, 9, 20, 0.75);
+  background: rgba(229, 9, 20, 0.12);
+}
+
+.sync-playback-btn:disabled,
+.playback-toggle:disabled,
+.reset-time-btn:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -401,7 +488,7 @@ body {
 
 #couch-root {
   position: relative;
-  max-width: 250px;
+  max-width: 420px;
   margin: 0 auto;
   width: 100%;
 }

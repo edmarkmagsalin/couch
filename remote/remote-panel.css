@@ -1,5 +1,7 @@
 :host {
   --couch-chat-height: 180px;
+  --couch-chat-font-size: 16px;
+  font-size: 16px;
 }
 
 :host(.embedded) {
@@ -32,7 +34,7 @@
 }
 
 @media (max-width: 600px) {
-  :host(.embedded) input[type="text"] {
+  :host(.embedded) {
     font-size: 16px;
   }
 }
