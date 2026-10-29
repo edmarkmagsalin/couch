@@ -22,6 +22,7 @@ type MediaSource = {
   handle?: VideoFileHandle
   fileSize?: number
   fileLastModified?: number
+  currentTime?: number
 }
 
 type SubtitleTrack = {
@@ -84,6 +85,7 @@ function App() {
   const [nativeAudioTrackCount, setNativeAudioTrackCount] = useState<number | null>(null)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [pendingRestore, setPendingRestore] = useState<PersistedMedia | null>(null)
   const [persistenceReady, setPersistenceReady] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -127,7 +129,12 @@ function App() {
       .then(async (saved) => {
         if (!saved || cancelled || restoreCancelled.current) return
         if (saved.kind === 'link') {
-          setMedia({ src: saved.src, title: saved.title, kind: 'link' })
+          setMedia({
+            src: saved.src,
+            title: saved.title,
+            kind: 'link',
+            currentTime: saved.currentTime ?? 0,
+          })
           setUrl(saved.src)
           setSubtitle(saved.subtitle ? createSubtitleTrack(saved.subtitle.blob, saved.subtitle.label) : null)
           return
@@ -150,6 +157,7 @@ function App() {
             handle: saved.handle,
             fileSize: file.size,
             fileLastModified: file.lastModified,
+            currentTime: saved.currentTime ?? 0,
           })
           setSubtitle(
             subtitleMatchesFile && saved.subtitle
@@ -191,12 +199,16 @@ function App() {
   useEffect(() => {
     if (!persistenceReady || !media) return
 
+    const currentTime = Number.isFinite(videoRef.current?.currentTime)
+      ? Math.max(0, videoRef.current!.currentTime)
+      : media.currentTime ?? 0
     const save = media.kind === 'link'
       ? saveMedia({
           kind: 'link',
           src: media.src,
           title: media.title,
           subtitle: subtitle ? { blob: subtitle.blob, label: subtitle.label } : null,
+          currentTime,
         })
       : saveMedia({
           kind: 'file',
@@ -205,6 +217,7 @@ function App() {
           size: media.fileSize ?? 0,
           lastModified: media.fileLastModified ?? 0,
           subtitle: subtitle ? { blob: subtitle.blob, label: subtitle.label } : null,
+          currentTime,
         })
     void save.catch((error: unknown) => {
       setPlayerError(error instanceof Error ? error.message : `Could not save media details: ${String(error)}`)
@@ -253,6 +266,7 @@ function App() {
       handle,
       fileSize: file.size,
       fileLastModified: file.lastModified,
+      currentTime: saved?.currentTime ?? 0,
     })
 
     if (extractEmbeddedSubtitles && !saved?.subtitle && /\.mkv$/i.test(file.name)) {
@@ -319,6 +333,7 @@ function App() {
       src: parsedUrl.href,
       title: parsedUrl.pathname.split('/').filter(Boolean).at(-1) || parsedUrl.hostname,
       kind: 'link',
+      currentTime: 0,
     })
   }
 
@@ -503,6 +518,12 @@ function App() {
 
   function handleVideoCanPlay(event: SyntheticEvent<HTMLVideoElement>) {
     const video = event.currentTarget
+    if (media?.currentTime && Number.isFinite(media.currentTime)) {
+      const savedTime = Math.min(media.currentTime, video.duration || media.currentTime)
+      if (!Number.isNaN(savedTime) && savedTime > 0 && Math.abs(video.currentTime - savedTime) > 0.5) {
+        video.currentTime = savedTime
+      }
+    }
     if (autoplayAttemptedFor.current === media?.src) return
 
     autoplayAttemptedFor.current = media?.src ?? null
@@ -510,6 +531,16 @@ function App() {
       () => setAutoplayBlocked(false),
       () => setAutoplayBlocked(true),
     )
+  }
+
+  function handleVideoTimeUpdate(event: SyntheticEvent<HTMLVideoElement>) {
+    const nextTime = event.currentTarget.currentTime
+    if (!Number.isFinite(nextTime)) return
+
+    setMedia((current) => {
+      if (!current || current.src !== media?.src) return current
+      return { ...current, currentTime: nextTime }
+    })
   }
 
   async function handleDrop(event: DragEvent<HTMLElement>) {
@@ -609,7 +640,7 @@ function App() {
         </div>
 
         <section
-          className={`player-frame${isDragging ? ' is-dragging' : ''}${media ? ' has-media' : ''}`}
+          className={`player-frame${isDragging ? ' is-dragging' : ''}${media ? ' has-media' : ''}${isPaused ? ' is-paused' : ''}`}
           aria-label="Video player"
           onDragOver={(event) => {
             event.preventDefault()
@@ -619,41 +650,49 @@ function App() {
           onDrop={handleDrop}
         >
           {media ? (
-            <video
-              key={media.src}
-              ref={videoRef}
-              className="video"
-              src={media.src}
-              controls
-              playsInline
-              preload="metadata"
-              onError={() => setPlayerError(
-                media.kind === 'file' && /\.mkv$/i.test(media.title)
-                  ? 'This MKV could not be played by your browser. Support depends on the browser and the video/audio codecs in the file.'
-                  : 'This video could not be played. Check the link or try another video file.',
-              )}
-              onCanPlay={(event) => {
-                setPlayerError('')
-                setNativeAudioTrackCount(
-                  (event.currentTarget as VideoWithAudioTracks).audioTracks?.length ?? 0,
-                )
-                handleVideoCanPlay(event)
-              }}
-              onPlay={() => setAutoplayBlocked(false)}
-            >
-              {subtitle && (
-                <track
-                  key={subtitle.src}
-                  kind="subtitles"
-                  src={subtitle.src}
-                  srcLang="en"
-                  label={subtitle.label}
-                  default
-                  onError={() => setPlayerError('The subtitle file could not be loaded by the browser.')}
-                />
-              )}
-              Your browser does not support video playback.
-            </video>
+            <>
+              <video
+                key={media.src}
+                ref={videoRef}
+                className="video"
+                src={media.src}
+                controls
+                playsInline
+                preload="metadata"
+                onError={() => setPlayerError(
+                  media.kind === 'file' && /\.mkv$/i.test(media.title)
+                    ? 'This MKV could not be played by your browser. Support depends on the browser and the video/audio codecs in the file.'
+                    : 'This video could not be played. Check the link or try another video file.',
+                )}
+                onCanPlay={(event) => {
+                  setPlayerError('')
+                  setNativeAudioTrackCount(
+                    (event.currentTarget as VideoWithAudioTracks).audioTracks?.length ?? 0,
+                  )
+                  handleVideoCanPlay(event)
+                }}
+                onTimeUpdate={handleVideoTimeUpdate}
+                onPause={() => setIsPaused(true)}
+                onPlay={() => {
+                  setAutoplayBlocked(false)
+                  setIsPaused(false)
+                }}
+              >
+                {subtitle && (
+                  <track
+                    key={subtitle.src}
+                    kind="subtitles"
+                    src={subtitle.src}
+                    srcLang="en"
+                    label={subtitle.label}
+                    default
+                    onError={() => setPlayerError('The subtitle file could not be loaded by the browser.')}
+                  />
+                )}
+                Your browser does not support video playback.
+              </video>
+              <div className="media-title-overlay" aria-hidden="true">{media.title}</div>
+            </>
           ) : (
             <div className="player-empty">
               <div className="play-mark" aria-hidden="true">
@@ -680,22 +719,7 @@ function App() {
           {isDragging && <div className="drop-overlay">Drop a video or SRT subtitle file</div>}
         </section>
 
-        <div className="player-details" aria-live="polite">
-          {media ? (
-            <>
-              <div className="now-playing">
-                <span className="playing-indicator" />
-                <div>
-                  <p className="detail-label">NOW PLAYING</p>
-                  <p className="media-title" title={media.title}>{media.title}</p>
-                </div>
-              </div>
-              <span className="source-badge">{media.kind === 'file' ? 'LOCAL FILE' : 'VIDEO LINK'}</span>
-            </>
-          ) : (
-            <p className="detail-placeholder">Your next favorite starts here</p>
-          )}
-        </div>
+        {!media && <p className="detail-placeholder">Your next favorite starts here</p>}
 
         {playerError && <p className="error-message" role="alert">{playerError}</p>}
         {subtitleError && <p className="error-message" role="alert">{subtitleError}</p>}
