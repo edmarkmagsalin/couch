@@ -19,14 +19,12 @@ export type PersistedMedia =
       size: number
       lastModified: number
       subtitle: PersistedSubtitle | null
-      currentTime?: number
     }
   | {
       kind: 'link'
       src: string
       title: string
       subtitle: PersistedSubtitle | null
-      currentTime?: number
     }
 
 type StoredMedia = {
