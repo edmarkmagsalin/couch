@@ -5,6 +5,7 @@ import coreURL from '@ffmpeg/core?url'
 import wasmURL from '@ffmpeg/core/wasm?url'
 import {
   chooseVideoFile,
+  deleteSavedMedia,
   getDroppedVideoHandle,
   readSavedMedia,
   saveMedia,
@@ -283,6 +284,27 @@ function App() {
       if (error instanceof DOMException && error.name === 'AbortError') return
       setPlayerError(error instanceof Error ? error.message : `Could not open the video file: ${String(error)}`)
     }
+  }
+
+  function clearCurrentMedia() {
+    restoreCancelled.current = true
+    setPendingRestore(null)
+    setUrl('')
+    setUrlError('')
+    setPlayerError('')
+    setSubtitleError('')
+    setPlayerNotice('Current media and subtitle removed.')
+    setAutoplayBlocked(false)
+    autoplayAttemptedFor.current = null
+    cancelSubtitleExtraction()
+    setSubtitle(null)
+    setAudioTracks([])
+    setSelectedAudioTrack(0)
+    setNativeAudioTrackCount(null)
+    setMedia(null)
+    void deleteSavedMedia().catch((error: unknown) => {
+      setPlayerError(error instanceof Error ? error.message : 'Could not clear saved media.')
+    })
   }
 
   function handleUrlSubmit(event: FormEvent<HTMLFormElement>) {
@@ -756,6 +778,11 @@ function App() {
               Load subtitles
             </button>
             {subtitle && <span className="action-caption subtitle-caption">{subtitle.label}</span>}
+            {(media || subtitle) && (
+              <button className="secondary-button" onClick={clearCurrentMedia}>
+                Remove current media
+              </button>
+            )}
           </div>
 
           <div className="divider"><span>OR PASTE A LINK</span></div>

@@ -118,3 +118,14 @@ export async function saveMedia(media: PersistedMedia): Promise<void> {
     transaction.onabort = () => reject(transaction.error ?? new Error('Saving media details was aborted.'))
   })
 }
+
+export async function deleteSavedMedia(): Promise<void> {
+  const database = await openDatabase()
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(storeName, 'readwrite')
+    const request = transaction.objectStore(storeName).delete('current')
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error ?? new Error('Could not remove saved media.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('Removing saved media was aborted.'))
+  })
+}
