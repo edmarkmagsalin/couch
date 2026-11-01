@@ -33,21 +33,6 @@ type SubtitleTrack = {
   blob: Blob
 }
 
-type MkvAudioTrack = {
-  streamIndex: number
-  label: string
-  isDefault: boolean
-}
-
-type NativeAudioTrackList = {
-  length: number
-  [index: number]: { enabled: boolean }
-}
-
-type VideoWithAudioTracks = HTMLVideoElement & {
-  audioTracks?: NativeAudioTrackList
-}
-
 const videoFileExtension = /\.(mp4|webm|ogg|ogv|mov|m4v|mkv|avi)$/i
 
 function createSubtitleTrack(blob: Blob, label: string): SubtitleTrack {
@@ -87,9 +72,6 @@ function App() {
   const [playerError, setPlayerError] = useState('')
   const [playerNotice, setPlayerNotice] = useState('')
   const [subtitleError, setSubtitleError] = useState('')
-  const [audioTracks, setAudioTracks] = useState<MkvAudioTrack[]>([])
-  const [selectedAudioTrack, setSelectedAudioTrack] = useState(0)
-  const [nativeAudioTrackCount, setNativeAudioTrackCount] = useState<number | null>(null)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [pendingRestore, setPendingRestore] = useState<PersistedMedia | null>(null)
@@ -117,17 +99,6 @@ function App() {
   useEffect(() => {
     if (subtitle) return () => URL.revokeObjectURL(subtitle.src)
   }, [subtitle])
-
-  useEffect(() => {
-    const nativeTracks = (videoRef.current as VideoWithAudioTracks | null)?.audioTracks
-    const trackCount = nativeTracks?.length ?? 0
-    setNativeAudioTrackCount(trackCount)
-
-    if (trackCount !== audioTracks.length || !nativeTracks) return
-    for (let index = 0; index < trackCount; index += 1) {
-      nativeTracks[index].enabled = index === selectedAudioTrack
-    }
-  }, [audioTracks, media, nativeAudioTrackCount, selectedAudioTrack])
 
   useEffect(() => {
     let cancelled = false
@@ -219,6 +190,20 @@ function App() {
     })
   }, [media, subtitle, persistenceReady])
 
+  useEffect(() => {
+    const hasMessage = Boolean(playerError || subtitleError || playerNotice || autoplayBlocked)
+    if (!hasMessage) return
+
+    const timer = window.setTimeout(() => {
+      setPlayerError('')
+      setSubtitleError('')
+      setPlayerNotice('')
+      setAutoplayBlocked(false)
+    }, 10000)
+
+    return () => window.clearTimeout(timer)
+  }, [playerError, subtitleError, playerNotice, autoplayBlocked])
+
   function cancelSubtitleExtraction() {
     subtitleExtractionId.current += 1
     ffmpegRef.current?.terminate()
@@ -249,9 +234,6 @@ function App() {
     )
     setAutoplayBlocked(false)
     autoplayAttemptedFor.current = null
-    setAudioTracks([])
-    setSelectedAudioTrack(0)
-    setNativeAudioTrackCount(null)
     setPendingRestore(null)
     setSubtitle(saved?.subtitle ? createSubtitleTrack(saved.subtitle.blob, saved.subtitle.label) : null)
     setMedia({
@@ -305,9 +287,6 @@ function App() {
     autoplayAttemptedFor.current = null
     cancelSubtitleExtraction()
     setSubtitle(null)
-    setAudioTracks([])
-    setSelectedAudioTrack(0)
-    setNativeAudioTrackCount(null)
     setMedia(null)
     void deleteSavedMedia().catch((error: unknown) => {
       setPlayerError(error instanceof Error ? error.message : 'Could not clear saved media.')
@@ -341,9 +320,6 @@ function App() {
     autoplayAttemptedFor.current = null
     cancelSubtitleExtraction()
     setSubtitle(null)
-    setAudioTracks([])
-    setSelectedAudioTrack(0)
-    setNativeAudioTrackCount(null)
     setMedia({
       src: parsedUrl.href,
       title: parsedUrl.pathname.split('/').filter(Boolean).at(-1) || parsedUrl.hostname,
@@ -418,43 +394,6 @@ function App() {
       if (!currentRequest()) return
 
       const streamLines = logs.flatMap((message) => message.split(/\r?\n/))
-      let audioOrdinal = 0
-      let activeAudioTrack: MkvAudioTrack | null = null
-      const discoveredAudioTracks: MkvAudioTrack[] = []
-      for (const line of streamLines) {
-        const match = line.match(
-          /Stream #0:(\d+)(?:\[[^\]]+\])?(?:\(([^)]*)\))?:\s*Audio:\s*([^,\s]+)/i,
-        )
-        if (match) {
-          audioOrdinal += 1
-          const [, streamIndexText, language, codec] = match
-          const description = [language, codec.toUpperCase()].filter(Boolean).join(' · ')
-          const isDefault = /\(default\)/i.test(line)
-          activeAudioTrack = {
-            streamIndex: Number(streamIndexText),
-            label: `${description || `Audio track ${audioOrdinal}`}${isDefault ? ' (default)' : ''}`,
-            isDefault,
-          }
-          discoveredAudioTracks.push(activeAudioTrack)
-          continue
-        }
-
-        if (/^\s*Stream #0:\d+/i.test(line)) {
-          activeAudioTrack = null
-          continue
-        }
-        const title = line.match(/^\s*title\s*:\s*(.+)$/i)?.[1]?.trim()
-        if (activeAudioTrack && title) {
-          const defaultLabel = activeAudioTrack.isDefault ? ' (default)' : ''
-          const trackDescription = activeAudioTrack.label.replace(/ \(default\)$/, '')
-          activeAudioTrack.label = `${title} — ${trackDescription}${defaultLabel}`
-          activeAudioTrack = null
-        }
-      }
-      setAudioTracks(discoveredAudioTracks)
-      const defaultTrackIndex = discoveredAudioTracks.findIndex((track) => track.isDefault)
-      const initialTrackIndex = defaultTrackIndex >= 0 ? defaultTrackIndex : 0
-      setSelectedAudioTrack(initialTrackIndex)
 
       const subtitleStreams = streamLines
         .map((line) => line.match(/Stream #0:(\d+)(?:\[[^\]]+\])?(?:\([^)]*\))?:\s*Subtitle:\s*([^,\s]+)/i))
@@ -462,22 +401,14 @@ function App() {
       const firstSubtitle = subtitleStreams[0]
 
       if (!firstSubtitle) {
-        setPlayerNotice(
-          discoveredAudioTracks.length > 1
-            ? 'Multiple audio tracks found. Choose a track below. No embedded subtitle track was found.'
-            : 'No embedded subtitle track was found.',
-        )
+        setPlayerNotice('No embedded subtitle track was found.')
         return
       }
 
       const [, streamIndex, codec] = firstSubtitle
       const normalizedCodec = codec.toLowerCase()
       if (normalizedCodec !== 'subrip' && normalizedCodec !== 'ass' && normalizedCodec !== 'webvtt') {
-        setPlayerNotice(
-          discoveredAudioTracks.length > 1
-            ? 'Multiple audio tracks found. Choose a track below. The first embedded subtitle track is unsupported.'
-            : 'The first embedded subtitle track is not S_TEXT/UTF8, S_TEXT/ASS, or WebVTT, so it was not extracted.',
-        )
+        setPlayerNotice('The first embedded subtitle track is not S_TEXT/UTF8, S_TEXT/ASS, or WebVTT, so it was not extracted.')
         return
       }
 
@@ -509,11 +440,7 @@ function App() {
         normalizedCodec === 'ass' ? 'Embedded ASS subtitles' : 'Embedded SRT subtitles',
       ))
       setSubtitleError('')
-      setPlayerNotice(
-        discoveredAudioTracks.length > 1
-          ? 'Multiple audio tracks found. Choose a track below. Embedded subtitles loaded.'
-          : 'Embedded subtitles loaded. Use the video controls to turn captions on or off.',
-      )
+      setPlayerNotice('Embedded subtitles loaded. Use the video controls to turn captions on or off.')
     } catch (error) {
       if (currentRequest()) {
         setSubtitleError(
@@ -627,20 +554,78 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Couch home">
-          <img src={couchLogo} alt="" />
-          <span>Couch</span>
-        </a>
-        <span className="local-badge"><span /> YOUR PERSONAL VIDEO PLAYER</span>
+        <div className="brand-group">
+          <a className="brand" href="/" aria-label="Couch home">
+            <img src={couchLogo} alt="" />
+            <span>Couch</span>
+          </a>
+          <span className="local-badge"><span /> LOCAL</span>
+        </div>
+
+        <div className="topbar-actions">
+          <div className="toolbar-inline">
+            <input
+              ref={fileInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="video/*,.mkv,.avi"
+              onChange={handleFileChange}
+              aria-label="Choose a video file"
+            />
+            <button className="secondary-button nav-button" onClick={() => void handleChooseFile()}>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Open file
+            </button>
+            <input
+              ref={subtitleInputRef}
+              className="visually-hidden"
+              type="file"
+              accept=".srt,application/x-subrip"
+              onChange={handleSubtitleChange}
+              aria-label="Choose an SRT subtitle file"
+              disabled={!media}
+            />
+            <button
+              className="secondary-button nav-button"
+              onClick={() => subtitleInputRef.current?.click()}
+              disabled={!media}
+            >
+              Subtitles
+            </button>
+            {(media || subtitle) && (
+              <button className="secondary-button danger-button nav-button" onClick={clearCurrentMedia}>
+                Remove
+              </button>
+            )}
+          </div>
+
+          <form className="nav-url-form" onSubmit={handleUrlSubmit} noValidate>
+            <label className="visually-hidden" htmlFor="video-url">Video URL</label>
+            <div className={`nav-url-input${urlError ? ' has-error' : ''}`}>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M8.1 11.9a3 3 0 0 0 4.24 0l2.12-2.12a3 3 0 0 0-4.24-4.24L9 6.76m2.9 1.34a3 3 0 0 0-4.24 0l-2.12 2.12a3 3 0 0 0 4.24 4.24L11 13.24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <input
+                id="video-url"
+                type="url"
+                value={url}
+                onChange={(event) => {
+                  setUrl(event.target.value)
+                  setUrlError('')
+                }}
+                placeholder="https://example.com/video.mp4"
+                aria-describedby={urlError ? 'url-error' : undefined}
+              />
+              <button type="submit" className="load-button">Load</button>
+            </div>
+            {urlError && <p className="url-error" id="url-error" role="alert">{urlError}</p>}
+          </form>
+        </div>
       </header>
 
       <section className="workspace">
-        <div className="intro">
-          <p className="eyebrow">A LITTLE SPACE FOR BIG STORIES</p>
-          <h1>Your video, <span>your space.</span></h1>
-          <p className="intro-copy">Drop in a file or paste a video link. Sit back and enjoy.</p>
-        </div>
-
         <section
           className={`player-frame${isDragging ? ' is-dragging' : ''}${media ? ' has-media' : ''}`}
           aria-label="Video player"
@@ -668,9 +653,6 @@ function App() {
                   )}
                   onCanPlay={(event) => {
                     setPlayerError('')
-                    setNativeAudioTrackCount(
-                      (event.currentTarget as VideoWithAudioTracks).audioTracks?.length ?? 0,
-                    )
                     handleVideoCanPlay(event)
                   }}
                   onPlay={() => setAutoplayBlocked(false)}
@@ -716,114 +698,12 @@ function App() {
           {isDragging && <div className="drop-overlay">Drop a video or SRT/VTT subtitle file</div>}
         </section>
 
-        <div className="player-details" aria-live="polite">
-          {media ? (
-            <>
-              <div className="now-playing">
-                <span className="playing-indicator" />
-                <div>
-                  <p className="detail-label">NOW PLAYING</p>
-                  <p className="media-title" title={media.title}>{media.title}</p>
-                </div>
-              </div>
-              <span className="source-badge">{media.kind === 'file' ? 'LOCAL FILE' : 'VIDEO LINK'}</span>
-            </>
-          ) : (
-            <p className="detail-placeholder">Your next favorite starts here</p>
-          )}
-        </div>
-
         {playerError && <p className="error-message" role="alert">{playerError}</p>}
         {subtitleError && <p className="error-message" role="alert">{subtitleError}</p>}
         {playerNotice && <p className="player-notice" role="status">{playerNotice}</p>}
         {autoplayBlocked && <p className="player-notice" role="status">Autoplay was blocked by your browser. Press Play to start the video.</p>}
-        {audioTracks.length > 1 && (
-          <div className="audio-track-picker">
-            <label htmlFor="audio-track">Audio track</label>
-            <select
-              id="audio-track"
-              value={selectedAudioTrack}
-              disabled={nativeAudioTrackCount !== audioTracks.length}
-              onChange={(event) => setSelectedAudioTrack(Number(event.target.value))}
-            >
-              {audioTracks.map((track, index) => (
-                <option key={track.streamIndex} value={index}>{track.label}</option>
-              ))}
-            </select>
-            <span>
-              {nativeAudioTrackCount === audioTracks.length
-                ? 'Select an embedded audio track.'
-                : 'This browser does not support native audio-track switching for this video.'}
-            </span>
-          </div>
-        )}
-
-        <div className="source-panel">
-          <div className="file-action">
-            <input
-              ref={fileInputRef}
-              className="visually-hidden"
-              type="file"
-              accept="video/*,.mkv,.avi"
-              onChange={handleFileChange}
-              aria-label="Choose a video file"
-            />
-            <button className="secondary-button" onClick={() => void handleChooseFile()}>
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Choose a file
-            </button>
-            <span className="action-caption">MKV: SRT/ASS auto-extract · playback varies</span>
-            <input
-              ref={subtitleInputRef}
-              className="visually-hidden"
-              type="file"
-              accept=".srt,application/x-subrip"
-              onChange={handleSubtitleChange}
-              aria-label="Choose an SRT subtitle file"
-              disabled={!media}
-            />
-            <button
-              className="secondary-button subtitle-button"
-              onClick={() => subtitleInputRef.current?.click()}
-              disabled={!media}
-            >
-              Load subtitles
-            </button>
-            {subtitle && <span className="action-caption subtitle-caption">{subtitle.label}</span>}
-            {(media || subtitle) && (
-              <button className="secondary-button" onClick={clearCurrentMedia}>
-                Remove current media
-              </button>
-            )}
-          </div>
-
-          <div className="divider"><span>OR PASTE A LINK</span></div>
-
-          <form className="url-form" onSubmit={handleUrlSubmit} noValidate>
-            <label className="visually-hidden" htmlFor="video-url">Video URL</label>
-            <div className={`url-input-wrap${urlError ? ' has-error' : ''}`}>
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M8.1 11.9a3 3 0 0 0 4.24 0l2.12-2.12a3 3 0 0 0-4.24-4.24L9 6.76m2.9 1.34a3 3 0 0 0-4.24 0l-2.12 2.12a3 3 0 0 0 4.24 4.24L11 13.24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <input
-                id="video-url"
-                type="url"
-                value={url}
-                onChange={(event) => {
-                  setUrl(event.target.value)
-                  setUrlError('')
-                }}
-                placeholder="https://example.com/video.mp4"
-                aria-describedby={urlError ? 'url-error' : undefined}
-              />
-              <button type="submit" className="load-button">Load video</button>
-            </div>
-            {urlError && <p className="url-error" id="url-error" role="alert">{urlError}</p>}
-          </form>
-        </div>
-
+      </section>
+      <footer className="footer">
         <p className="privacy-note">
           <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M8 2.25 3.5 4v3.5c0 2.8 1.9 5.25 4.5 6.25 2.6-1 4.5-3.45 4.5-6.25V4L8 2.25Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
@@ -831,8 +711,8 @@ function App() {
           </svg>
           Video bytes stay on your device; Couch saves only file access, links, and subtitle data locally.
         </p>
-      </section>
-      <footer className="footer">Made for the moments worth pressing play on.</footer>
+        <div>© {new Date().getFullYear()} Couch. All rights reserved.</div>
+      </footer>
     </main>
   )
 }
