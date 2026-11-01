@@ -34,6 +34,46 @@ type SubtitleTrack = {
 }
 
 const videoFileExtension = /\.(mp4|webm|ogg|ogv|mov|m4v|mkv|avi)$/i
+const videoVolumeStorageKey = 'couch-video-volume'
+const videoMutedStorageKey = 'couch-video-muted'
+
+function getStoredVideoVolume(): number | null {
+  try {
+    const rawValue = window.localStorage.getItem(videoVolumeStorageKey)
+    if (rawValue === null) return null
+    const value = Number(rawValue)
+    if (!Number.isFinite(value)) return null
+    return Math.min(1, Math.max(0, value))
+  } catch {
+    return null
+  }
+}
+
+function setStoredVideoVolume(volume: number) {
+  try {
+    window.localStorage.setItem(videoVolumeStorageKey, String(Math.min(1, Math.max(0, volume))))
+  } catch {
+    // Ignore storage failures so playback keeps working when localStorage is unavailable.
+  }
+}
+
+function getStoredVideoMuted(): boolean | null {
+  try {
+    const rawValue = window.localStorage.getItem(videoMutedStorageKey)
+    if (rawValue === null) return null
+    return rawValue === 'true'
+  } catch {
+    return null
+  }
+}
+
+function setStoredVideoMuted(muted: boolean) {
+  try {
+    window.localStorage.setItem(videoMutedStorageKey, String(muted))
+  } catch {
+    // Ignore storage failures so playback keeps working when localStorage is unavailable.
+  }
+}
 
 function createSubtitleTrack(blob: Blob, label: string): SubtitleTrack {
   return {
@@ -460,6 +500,12 @@ function App() {
 
   function handleVideoCanPlay(event: SyntheticEvent<HTMLVideoElement> | HTMLVideoElement) {
     const video = 'currentTarget' in event ? event.currentTarget : event
+    const savedVolume = getStoredVideoVolume()
+    const savedMuted = getStoredVideoMuted()
+
+    if (savedVolume !== null) video.volume = savedVolume
+    if (savedMuted !== null) video.muted = savedMuted
+
     if (autoplayAttemptedFor.current === media?.src) return
 
     autoplayAttemptedFor.current = media?.src ?? null
@@ -673,6 +719,11 @@ function App() {
                   onCanPlay={(event) => {
                     setPlayerError('')
                     handleVideoCanPlay(event)
+                  }}
+                  onVolumeChange={(event) => {
+                    const video = event.currentTarget
+                    setStoredVideoVolume(video.volume)
+                    setStoredVideoMuted(video.muted)
                   }}
                   onPlay={() => setAutoplayBlocked(false)}
                 >
