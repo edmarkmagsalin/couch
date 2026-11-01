@@ -641,7 +641,7 @@ function App() {
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Open file
+              Load Media
             </button>
             <input
               ref={subtitleInputRef}
@@ -657,11 +657,14 @@ function App() {
               onClick={() => subtitleInputRef.current?.click()}
               disabled={!media}
             >
-              Subtitles
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Load Subtitle
             </button>
             {(media || subtitle) && (
               <button className="secondary-button danger-button nav-button" onClick={clearCurrentMedia}>
-                Remove
+                Reset
               </button>
             )}
           </div>
