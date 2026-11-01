@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent, SyntheticEvent } from 'react'
+import { Video, VideoPlayer, VideoSkin } from '@videojs/react/video'
+import '@videojs/react/video/skin.css'
 import { FFmpeg, FFFSType } from '@ffmpeg/ffmpeg'
 import coreURL from '@ffmpeg/core?url'
 import wasmURL from '@ffmpeg/core/wasm?url'
@@ -58,6 +60,11 @@ function createSubtitleTrack(blob: Blob, label: string): SubtitleTrack {
 
 function isVideoFile(file: File) {
   return file.type.startsWith('video/') || videoFileExtension.test(file.name)
+}
+
+function isSubtitleFile(file: File) {
+  const name = file.name.toLowerCase()
+  return name.endsWith('.srt')
 }
 
 function convertSrtToVtt(srt: string) {
@@ -355,7 +362,7 @@ function App() {
       return
     }
 
-    if (!file.name.toLowerCase().endsWith('.srt')) {
+    if (!isSubtitleFile(file)) {
       setPlayerError('Choose an SRT subtitle file.')
       return
     }
@@ -450,7 +457,7 @@ function App() {
       setSelectedAudioTrack(initialTrackIndex)
 
       const subtitleStreams = streamLines
-        .map((line) => line.match(/Stream #0:(\d+)(?:\[[^\]]+\])?(?:\([^)]*\))?:\s*Subtitle:\s*([^\s,(]+)/i))
+        .map((line) => line.match(/Stream #0:(\d+)(?:\[[^\]]+\])?(?:\([^)]*\))?:\s*Subtitle:\s*([^,\s]+)/i))
         .filter((match): match is RegExpMatchArray => match !== null)
       const firstSubtitle = subtitleStreams[0]
 
@@ -465,11 +472,11 @@ function App() {
 
       const [, streamIndex, codec] = firstSubtitle
       const normalizedCodec = codec.toLowerCase()
-      if (normalizedCodec !== 'subrip' && normalizedCodec !== 'ass') {
+      if (normalizedCodec !== 'subrip' && normalizedCodec !== 'ass' && normalizedCodec !== 'webvtt') {
         setPlayerNotice(
           discoveredAudioTracks.length > 1
             ? 'Multiple audio tracks found. Choose a track below. The first embedded subtitle track is unsupported.'
-            : 'The first embedded subtitle track is not S_TEXT/UTF8 or S_TEXT/ASS, so it was not extracted.',
+            : 'The first embedded subtitle track is not S_TEXT/UTF8, S_TEXT/ASS, or WebVTT, so it was not extracted.',
         )
         return
       }
@@ -523,8 +530,8 @@ function App() {
     }
   }
 
-  function handleVideoCanPlay(event: SyntheticEvent<HTMLVideoElement>) {
-    const video = event.currentTarget
+  function handleVideoCanPlay(event: SyntheticEvent<HTMLVideoElement> | HTMLVideoElement) {
+    const video = 'currentTarget' in event ? event.currentTarget : event
     if (autoplayAttemptedFor.current === media?.src) return
 
     autoplayAttemptedFor.current = media?.src ?? null
@@ -545,7 +552,7 @@ function App() {
 
     if (files.length === 1) {
       const [file] = files
-      if (file.name.toLowerCase().endsWith('.srt')) {
+      if (isSubtitleFile(file)) {
         void loadSubtitleFile(file)
       } else {
         const item = Array.from(event.dataTransfer.items).find(
@@ -563,7 +570,7 @@ function App() {
     }
 
     const videos = files.filter(isVideoFile)
-    const subtitles = files.filter((file) => file.name.toLowerCase().endsWith('.srt'))
+    const subtitles = files.filter(isSubtitleFile)
     if (files.length !== 2 || videos.length !== 1 || subtitles.length !== 1) {
       setPlayerError('Drop one video and one SRT subtitle file together.')
       return
@@ -579,17 +586,21 @@ function App() {
       return null
     })
     cancelSubtitleExtraction()
-    void Promise.all([createSubtitleFromSrt(subtitleFile), handlePromise])
-      .then(([track, handle]) => {
+    void (async () => {
+      try {
+        const [track, handle] = await Promise.all([
+          createSubtitleFromSrt(subtitleFile),
+          handlePromise,
+        ])
         loadFile(video, false, handle ?? undefined)
         setSubtitle(track)
         setPlayerError('')
         setSubtitleError('')
         setPlayerNotice('Subtitles loaded. Use the video controls to turn captions on or off.')
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         setPlayerError(error instanceof Error ? error.message : 'Could not read this subtitle file.')
-      })
+      }
+    })()
   }
 
   async function handleRestoreSavedMovie() {
@@ -641,41 +652,44 @@ function App() {
           onDrop={handleDrop}
         >
           {media ? (
-            <video
-              key={media.src}
-              ref={videoRef}
-              className="video"
-              src={media.src}
-              controls
-              playsInline
-              preload="metadata"
-              onError={() => setPlayerError(
-                media.kind === 'file' && /\.mkv$/i.test(media.title)
-                  ? 'This MKV could not be played by your browser. Support depends on the browser and the video/audio codecs in the file.'
-                  : 'This video could not be played. Check the link or try another video file.',
-              )}
-              onCanPlay={(event) => {
-                setPlayerError('')
-                setNativeAudioTrackCount(
-                  (event.currentTarget as VideoWithAudioTracks).audioTracks?.length ?? 0,
-                )
-                handleVideoCanPlay(event)
-              }}
-              onPlay={() => setAutoplayBlocked(false)}
-            >
-              {subtitle && (
-                <track
-                  key={subtitle.src}
-                  kind="subtitles"
-                  src={subtitle.src}
-                  srcLang="en"
-                  label={subtitle.label}
-                  default
-                  onError={() => setPlayerError('The subtitle file could not be loaded by the browser.')}
-                />
-              )}
-              Your browser does not support video playback.
-            </video>
+            <VideoPlayer title={media.title}>
+              <VideoSkin>
+                <Video
+                  key={media.src}
+                  ref={videoRef}
+                  className="video"
+                  src={media.src}
+                  playsInline
+                  preload="metadata"
+                  onError={() => setPlayerError(
+                    media.kind === 'file' && /\.mkv$/i.test(media.title)
+                      ? 'This MKV could not be played by your browser. Support depends on the browser and the video/audio codecs in the file.'
+                      : 'This video could not be played. Check the link or try another video file.',
+                  )}
+                  onCanPlay={(event) => {
+                    setPlayerError('')
+                    setNativeAudioTrackCount(
+                      (event.currentTarget as VideoWithAudioTracks).audioTracks?.length ?? 0,
+                    )
+                    handleVideoCanPlay(event)
+                  }}
+                  onPlay={() => setAutoplayBlocked(false)}
+                >
+                  {subtitle && (
+                    <track
+                      key={subtitle.src}
+                      kind="subtitles"
+                      src={subtitle.src}
+                      srcLang="en"
+                      label={subtitle.label}
+                      default
+                      onError={() => setPlayerError('The subtitle file could not be loaded by the browser.')}
+                    />
+                  )}
+                  Your browser does not support video playback.
+                </Video>
+              </VideoSkin>
+            </VideoPlayer>
           ) : (
             <div className="player-empty">
               <div className="play-mark" aria-hidden="true">
@@ -696,10 +710,10 @@ function App() {
                   Restore saved movie
                 </button>
               )}
-              <span className="drop-hint">or drop one video and one SRT together</span>
+              <span className="drop-hint">or drop one video and one subtitle together</span>
             </div>
           )}
-          {isDragging && <div className="drop-overlay">Drop a video or SRT subtitle file</div>}
+          {isDragging && <div className="drop-overlay">Drop a video or SRT/VTT subtitle file</div>}
         </section>
 
         <div className="player-details" aria-live="polite">
