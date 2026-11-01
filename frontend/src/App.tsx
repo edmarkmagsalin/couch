@@ -74,6 +74,7 @@ function App() {
   const [subtitleError, setSubtitleError] = useState('')
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isNavOpen, setIsNavOpen] = useState(false)
   const [pendingRestore, setPendingRestore] = useState<PersistedMedia | null>(null)
   const [persistenceReady, setPersistenceReady] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -551,16 +552,34 @@ function App() {
     }
   }
 
+  const mediaSourceBadge = media ? (media.kind === 'file' ? 'LOCAL' : 'REMOTE') : null
+
   return (
     <main className="app-shell">
-      <header className="topbar">
+      <header className={`topbar${isNavOpen ? ' is-nav-open' : ''}`}>
         <div className="brand-group">
           <a className="brand" href="/" aria-label="Couch home">
             <img src={couchLogo} alt="" />
             <span>Couch</span>
           </a>
-          <span className="local-badge"><span /> LOCAL</span>
+          {mediaSourceBadge && (
+            <span className={`local-badge${media?.kind === 'link' ? ' remote-badge' : ''}`}>
+              <span /> {mediaSourceBadge}
+            </span>
+          )}
         </div>
+
+        <button
+          type="button"
+          className="nav-collapse-toggle"
+          aria-label={isNavOpen ? 'Collapse toolbar' : 'Expand toolbar'}
+          aria-expanded={isNavOpen}
+          onClick={() => setIsNavOpen((open) => !open)}
+        >
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M5 7.5 10 12.5 15 7.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
 
         <div className="topbar-actions">
           <div className="toolbar-inline">
