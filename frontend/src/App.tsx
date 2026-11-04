@@ -33,6 +33,41 @@ type SubtitleTrack = {
   blob: Blob
 }
 
+function parseVttTimestamp(value: string): number {
+  const [hours, minutes, secondsAndMs] = value.split(':')
+  const [seconds, milliseconds = '0'] = secondsAndMs.split('.')
+  return (((Number(hours) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000) + Number(milliseconds.padEnd(3, '0'))
+}
+
+function formatVttTimestamp(valueMs: number): string {
+  const totalMs = Math.max(0, Math.round(valueMs))
+  const hours = Math.floor(totalMs / 3_600_000)
+  const minutes = Math.floor((totalMs % 3_600_000) / 60_000)
+  const seconds = Math.floor((totalMs % 60_000) / 1000)
+  const milliseconds = totalMs % 1000
+  return [hours, minutes, seconds]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':') + `.${String(milliseconds).padStart(3, '0')}`
+}
+
+function applySubtitleOffset(vttText: string, offsetSeconds: number): string {
+  if (offsetSeconds === 0) return vttText
+
+  const offsetMs = offsetSeconds * 1000
+  return vttText.replace(
+    /(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})([^\n]*)/g,
+    (_match, startTime, endTime, trailing) => {
+      const adjustedStart = formatVttTimestamp(parseVttTimestamp(startTime) + offsetMs)
+      const adjustedEnd = formatVttTimestamp(parseVttTimestamp(endTime) + offsetMs)
+      return `${adjustedStart} --> ${adjustedEnd}${trailing}`
+    },
+  )
+}
+
+function createSubtitleTrackFromVtt(vttText: string, label: string, offsetSeconds = 0): SubtitleTrack {
+  return createSubtitleTrack(new Blob([applySubtitleOffset(vttText, offsetSeconds)], { type: 'text/vtt' }), label)
+}
+
 const videoFileExtension = /\.(mp4|webm|ogg|ogv|mov|m4v|mkv|avi)$/i
 const videoVolumeStorageKey = 'couch-video-volume'
 const videoMutedStorageKey = 'couch-video-muted'
@@ -107,6 +142,8 @@ function convertSrtToVtt(srt: string) {
 function App() {
   const [media, setMedia] = useState<MediaSource | null>(null)
   const [subtitle, setSubtitle] = useState<SubtitleTrack | null>(null)
+  const [subtitleSourceText, setSubtitleSourceText] = useState<string | null>(null)
+  const [subtitleOffsetSeconds, setSubtitleOffsetSeconds] = useState(0)
   const [url, setUrl] = useState('')
   const [urlError, setUrlError] = useState('')
   const [playerError, setPlayerError] = useState('')
@@ -275,7 +312,8 @@ function App() {
     )
     setAutoplayBlocked(false)
     autoplayAttemptedFor.current = null
-    setPendingRestore(null)
+    setSubtitleOffsetSeconds(0)
+    setSubtitleSourceText(null)
     setSubtitle(saved?.subtitle ? createSubtitleTrack(saved.subtitle.blob, saved.subtitle.label) : null)
     setMedia({
       src: URL.createObjectURL(file),
@@ -326,6 +364,8 @@ function App() {
     setPlayerNotice('Current media and subtitle removed.')
     setAutoplayBlocked(false)
     autoplayAttemptedFor.current = null
+    setSubtitleOffsetSeconds(0)
+    setSubtitleSourceText(null)
     cancelSubtitleExtraction()
     setSubtitle(null)
     setMedia(null)
@@ -359,6 +399,8 @@ function App() {
     setPlayerNotice('')
     setAutoplayBlocked(false)
     autoplayAttemptedFor.current = null
+    setSubtitleOffsetSeconds(0)
+    setSubtitleSourceText(null)
     cancelSubtitleExtraction()
     setSubtitle(null)
     setMedia({
@@ -385,7 +427,10 @@ function App() {
     }
 
     try {
-      setSubtitle(await createSubtitleFromSrt(file))
+      const subtitleText = convertSrtToVtt(await file.text())
+      setSubtitleSourceText(subtitleText)
+      setSubtitleOffsetSeconds(0)
+      setSubtitle(createSubtitleTrackFromVtt(subtitleText, file.name.replace(/\.srt$/i, '')))
       setPlayerError('')
       setPlayerNotice('Subtitles loaded. Use the video controls to turn captions on or off.')
     } catch (error) {
@@ -395,7 +440,7 @@ function App() {
 
   async function createSubtitleFromSrt(file: File): Promise<SubtitleTrack> {
     const webVtt = convertSrtToVtt(await file.text())
-    return createSubtitleTrack(new Blob([webVtt], { type: 'text/vtt' }), file.name.replace(/\.srt$/i, ''))
+    return createSubtitleTrackFromVtt(webVtt, file.name.replace(/\.srt$/i, ''))
   }
 
   function handleSubtitleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -476,8 +521,11 @@ function App() {
       if (typeof subtitleData === 'string') throw new Error('The extracted subtitle file could not be read.')
       if (!currentRequest()) return
 
-      setSubtitle(createSubtitleTrack(
-        new Blob([new Uint8Array(subtitleData)], { type: 'text/vtt' }),
+      const subtitleText = new TextDecoder().decode(subtitleData)
+      setSubtitleSourceText(subtitleText)
+      setSubtitleOffsetSeconds(0)
+      setSubtitle(createSubtitleTrackFromVtt(
+        subtitleText,
         normalizedCodec === 'ass' ? 'Embedded ASS subtitles' : 'Embedded SRT subtitles',
       ))
       setSubtitleError('')
@@ -496,6 +544,14 @@ function App() {
       ffmpeg.terminate()
       if (ffmpegRef.current === ffmpeg) ffmpegRef.current = null
     }
+  }
+
+  function handleSubtitleOffset(deltaSeconds: number) {
+    if (!subtitleSourceText || !subtitle) return
+
+    const nextOffset = Number((subtitleOffsetSeconds + deltaSeconds).toFixed(1))
+    setSubtitleOffsetSeconds(nextOffset)
+    setSubtitle(createSubtitleTrackFromVtt(subtitleSourceText, subtitle.label, nextOffset))
   }
 
   function handleVideoCanPlay(event: SyntheticEvent<HTMLVideoElement> | HTMLVideoElement) {
@@ -566,7 +622,10 @@ function App() {
           createSubtitleFromSrt(subtitleFile),
           handlePromise,
         ])
+        const subtitleText = convertSrtToVtt(await subtitleFile.text())
         loadFile(video, false, handle ?? undefined)
+        setSubtitleSourceText(subtitleText)
+        setSubtitleOffsetSeconds(0)
         setSubtitle(track)
         setPlayerError('')
         setSubtitleError('')
@@ -637,12 +696,19 @@ function App() {
               onChange={handleFileChange}
               aria-label="Choose a video file"
             />
-            <button className="secondary-button nav-button" onClick={() => void handleChooseFile()}>
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Load Media
-            </button>
+            {!media && (
+              <button className="secondary-button nav-button" onClick={() => void handleChooseFile()}>
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Load Media
+              </button>
+            )}
+            {media && (
+              <button className="secondary-button danger-button nav-button" onClick={clearCurrentMedia}>
+                Remove Media
+              </button>
+            )}
             <input
               ref={subtitleInputRef}
               className="visually-hidden"
@@ -652,16 +718,49 @@ function App() {
               aria-label="Choose an SRT subtitle file"
               disabled={!media}
             />
-            <button
-              className="secondary-button nav-button"
-              onClick={() => subtitleInputRef.current?.click()}
-              disabled={!media}
-            >
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Load Subtitle
-            </button>
+            {!subtitle && (
+              <button
+                className="secondary-button nav-button"
+                onClick={() => subtitleInputRef.current?.click()}
+                disabled={!media}
+              >
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5M4 12.5v3A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Load Subtitle
+              </button>
+            )}
+            {subtitle && (
+              <div className="subtitle-offset-controls">
+                <button
+                  type="button"
+                  className="secondary-button nav-button subtitle-offset-button danger-button"
+                  onClick={() => setSubtitle(null)}
+                  aria-label="Remove the current subtitle track"
+                >
+                  Remove Subtitle
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button nav-button subtitle-offset-button"
+                  onClick={() => handleSubtitleOffset(-0.5)}
+                  aria-label="Delay subtitles by half a second"
+                  title='Fixes delayed subtitle'
+                >
+                  -0.5s
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button nav-button subtitle-offset-button"
+                  onClick={() => handleSubtitleOffset(0.5)}
+                  aria-label="Advance subtitles by half a second"
+                  title='Fixes advanced subtitle'
+                >
+                  +0.5s
+                </button>
+                <span className="subtitle-offset-label">{subtitleOffsetSeconds === 0 ? 'sync' : `${subtitleOffsetSeconds > 0 ? '+' : ''}${subtitleOffsetSeconds.toFixed(1)}s`}</span>
+              </div>
+            )}
             {(media || subtitle) && (
               <button className="secondary-button danger-button nav-button" onClick={clearCurrentMedia}>
                 Reset
