@@ -815,7 +815,7 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
     messageContent.title = messageDate.toLocaleString();
     rowDiv.dataset.messageTimestampTitle = messageContent.title;
   }
-  const isEmojiOnly = CouchShared.isSingleEmoji(text);
+  const isEmojiOnly = CouchShared.isEmojiOnly(text);
   if (isEmojiOnly && !announcement?.replyTo) messageContent.classList.add('emoji-only');
   if (announcement?.replyTo) {
     const quote = document.createElement('button');

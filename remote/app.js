@@ -515,10 +515,9 @@ async function initializeRemote() {
       const messageText = document.createElement('span');
       messageText.className = 'message-text';
       messageText.textContent = message.text;
-      if (CouchShared.isSingleEmoji(message.text)) {
-        if (message.replyTo) messageText.classList.add('emoji-only');
-        else content.classList.add('emoji-only');
-      }
+      const isEmojiOnly = CouchShared.isEmojiOnly(message.text);
+      if (isEmojiOnly && message.replyTo) messageText.classList.add('emoji-only');
+      if (isEmojiOnly && !message.replyTo) content.classList.add('emoji-only');
       content.append(messageText);
       row.append(content);
     }
