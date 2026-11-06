@@ -35,6 +35,11 @@ function formatPlaybackTimestamp(seconds) {
     : `${minutes}:${secondsText}`;
 }
 
+function containsPauseTrigger(text) {
+  const normalized = String(text ?? '').toLowerCase();
+  return normalized.includes('wait') || normalized.includes('brb') || normalized.includes('sandali');
+}
+
 function getRoomUserList(room) {
   const usernames = [...new Set(room.users.map(user => user.username))];
   const hostIndex = usernames.indexOf(room.host);
@@ -657,7 +662,6 @@ io.on('connection', (socket) => {
 
   // --- CHAT EVENTS ---
   socket.on('send-message', ({ roomId, username, text }) => {
-    // NEW: Log exactly what the server receives!
     console.log(`[CHAT] ${username} in ${roomId}: ${text}`);
 
     if (!roomStates[roomId]) {
@@ -667,10 +671,26 @@ io.on('connection', (socket) => {
       };
     }
 
-    const chatMessage = { sender: username, text: text, time: Date.now() };
+    const normalizedText = String(text ?? '');
+    const chatMessage = { sender: username, text: normalizedText, time: Date.now() };
+
+    if (containsPauseTrigger(normalizedText)) {
+      const room = roomStates[roomId];
+      const updatedAt = Date.now();
+      room.video = {
+        ...room.video,
+        status: 'paused',
+        timestamp: Number.isFinite(room.video?.timestamp) ? room.video.timestamp : 0,
+        updatedAt
+      };
+      io.in(roomId).emit('pause-video', {
+        timestamp: room.video.timestamp,
+        updatedAt
+      });
+    }
 
     if (roomStates[roomId].chatHistory.length >= 50) {
-      roomStates[roomId].chatHistory.shift(); 
+      roomStates[roomId].chatHistory.shift();
     }
     roomStates[roomId].chatHistory.push(chatMessage);
 

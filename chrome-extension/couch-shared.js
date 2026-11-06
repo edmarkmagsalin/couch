@@ -44,6 +44,11 @@ function parseSeekCommand(text) {
   return match ? parseTimestamp(match[1]) : null;
 }
 
+function containsPauseTrigger(text) {
+  const normalized = String(text ?? '').toLowerCase();
+  return normalized.includes('wait') || normalized.includes('brb') || normalized.includes('sandali');
+}
+
 function setArrowIcon(button, direction) {
   const rotations = { up: 0, right: 90, down: 180, left: 270 };
   const rotation = rotations[direction];
@@ -142,6 +147,7 @@ globalThis.CouchShared = Object.freeze({
   formatTimestamp,
   parseTimestamp,
   parseSeekCommand,
+  containsPauseTrigger,
   setArrowIcon,
   createChatResizer
 });

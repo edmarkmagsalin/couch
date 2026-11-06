@@ -528,6 +528,12 @@ async function initializeRemote() {
       return;
     }
 
+    if (CouchShared.containsPauseTrigger(message)) {
+      const timestamp = currentTimestamp();
+      setPlayback('paused', timestamp);
+      emitVideoAction('pause', timestamp);
+    }
+
     addMessage({ sender: 'You', text: message, time: Date.now() });
     socket.emit('send-message', { roomId: currentRoom, username, text: message });
   }

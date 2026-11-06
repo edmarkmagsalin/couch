@@ -793,6 +793,22 @@ function emitLocalChatMessage(text) {
     return;
   }
 
+  if (CouchShared.containsPauseTrigger(trimmedText)) {
+    const video = findVideoElement();
+    const pauseTimestamp = Number.isFinite(video?.currentTime) ? video.currentTime : 0;
+    pendingVideoState = { status: 'paused', timestamp: pauseTimestamp };
+    if (video) {
+      applyVideoState(video, pendingVideoState);
+    }
+    socket.emit('pause-video', { roomId: currentRoom, timestamp: pauseTimestamp });
+    socket.emit('video-action', {
+      roomId: currentRoom,
+      username: myUsername,
+      action: 'pause',
+      timestamp: pauseTimestamp
+    });
+  }
+
   appendMessage('You', trimmedText);
   socket.emit('send-message', {
     roomId: currentRoom,
