@@ -551,6 +551,7 @@ window.addEventListener('resize', snapToEdge);
 const messageList = shadow.getElementById('messages');
 const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
+const typingIndicator = shadow.getElementById('typing-indicator');
 const roomUsersToggle = shadow.getElementById('room-users-toggle');
 const roomUsersCount = shadow.getElementById('room-users-count');
 const roomUsersPanel = shadow.getElementById('room-users-panel');
@@ -570,6 +571,42 @@ const messagesVisibilityObserver = new IntersectionObserver(([entry]) => {
     scheduleBlurOpacity();
   }
 }, { threshold: 0.1 });
+
+let localTypingState = false;
+
+function renderTypingIndicator(users) {
+  const names = [...new Set((users || []).filter(Boolean).filter(name => name !== myUsername))];
+  const main = typingIndicator.closest('main');
+  if (names.length === 0) {
+    typingIndicator.hidden = true;
+    typingIndicator.replaceChildren();
+    main?.classList.remove('has-typing-indicator');
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  const nameText = names.length === 1 ? names[0] : names.slice(0, 2).join(', ');
+  const actionText = names.length === 1 ? ' is typing...' : ' are typing...';
+
+  const nameNode = document.createElement('span');
+  nameNode.className = 'typing-username';
+  nameNode.textContent = nameText;
+
+  const textNode = document.createElement('span');
+  textNode.className = 'typing-text';
+  textNode.textContent = actionText;
+
+  fragment.append(nameNode, textNode);
+  typingIndicator.hidden = false;
+  typingIndicator.replaceChildren(fragment);
+  main?.classList.add('has-typing-indicator');
+
+  requestAnimationFrame(() => {
+    if (messageList.scrollHeight > messageList.clientHeight) {
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+  });
+}
 
 messagesVisibilityObserver.observe(messageMain);
 
@@ -940,6 +977,7 @@ function captureAndSaveUsername() {
 function showRoom(roomId) {
   currentRoom = roomId;
   joiningRoomId = null;
+  renderTypingIndicator([]);
   displayRoomId.textContent = currentRoom;
   lobbyView.style.display = 'none';
   chatContainer.style.display = isCompactView ? 'none' : 'flex';
@@ -1035,9 +1073,12 @@ clearChatButton.addEventListener('click', clearOwnChatHistory);
 leaveRoomBtn.addEventListener('click', () => {
   if (!currentRoom) return;
 
+  localTypingState = false;
+  socket.emit('typing', { roomId: currentRoom, username: myUsername, isTyping: false });
   socket.emit('leave-room', { roomId: currentRoom, username: myUsername });
 
   clearChatHistory();
+  renderTypingIndicator([]);
   roomUsersList.replaceChildren();
   renderRoomUsers([], null);
   roomUsersPanel.hidden = true;
@@ -1190,8 +1231,28 @@ chatForm.addEventListener('submit', (event) => {
 
   if (!text) return;
 
+  localTypingState = false;
+  socket.emit('typing', { roomId: currentRoom, username: myUsername, isTyping: false });
   emitLocalChatMessage(text);
   chatInput.value = '';
+});
+
+chatInput.addEventListener('input', () => {
+  if (!currentRoom || !socket.connected) return;
+  const nextTypingState = chatInput.value.trim().length > 0;
+  if (localTypingState === nextTypingState) return;
+  localTypingState = nextTypingState;
+  socket.emit('typing', { roomId: currentRoom, username: myUsername, isTyping: nextTypingState });
+});
+
+chatInput.addEventListener('blur', () => {
+  if (!currentRoom || !localTypingState) return;
+  localTypingState = false;
+  socket.emit('typing', { roomId: currentRoom, username: myUsername, isTyping: false });
+});
+
+socket.on('room-typing', ({ users = [] }) => {
+  renderTypingIndicator(users);
 });
 
 socket.on('new-message', (data) => {
@@ -1223,6 +1284,7 @@ socket.on('sync-room', (state) => {
   const roomId = joiningRoomId || currentRoom;
   if (roomId) chatHistoryClearedAt = Number(chatHistoryClearedAtByRoom[roomId]) || 0;
   renderSyncedChatHistory(state.chatHistory);
+  renderTypingIndicator([]);
 });
 
 socket.on('sync-playback-state', ({ roomId, status, timestamp }) => {

@@ -42,6 +42,7 @@ async function initializeRemote() {
   const joinError = shadow.getElementById('join-error');
   const roomLoading = shadow.getElementById('room-loading-message');
   const displayRoomId = shadow.getElementById('display-room-id');
+  const typingIndicator = shadow.getElementById('typing-indicator');
   const roomUsersToggle = shadow.getElementById('room-users-toggle');
   const roomUsersCount = shadow.getElementById('room-users-count');
   const roomUsersPanel = shadow.getElementById('room-users-panel');
@@ -452,6 +453,7 @@ async function initializeRemote() {
     currentRoom = roomId;
     isRoomJoined = true;
     joiningRoomId = null;
+    renderTypingIndicator([]);
     chatHistoryClearedAt = Number(localStorage.getItem(`couch_chat_cleared_${roomId}`)) || 0;
     persistSession();
     displayRoomId.textContent = roomId;
@@ -478,6 +480,7 @@ async function initializeRemote() {
     compactMessages.replaceChildren();
     roomUsersList.replaceChildren();
     renderRoomUsers([], null);
+    renderTypingIndicator([]);
     roomUsersPanel.hidden = true;
     roomUsersToggle.setAttribute('aria-expanded', 'false');
     displayRoomId.textContent = '...';
@@ -548,6 +551,42 @@ async function initializeRemote() {
     localStorage.setItem(`couch_chat_cleared_${currentRoom}`, String(chatHistoryClearedAt));
     messageList.replaceChildren();
     compactMessages.replaceChildren();
+  }
+
+  let localTypingState = false;
+
+  function renderTypingIndicator(users) {
+    const names = [...new Set((users || []).filter(Boolean).filter(name => name !== username))];
+    const main = typingIndicator.closest('main');
+    if (names.length === 0) {
+      typingIndicator.hidden = true;
+      typingIndicator.replaceChildren();
+      main?.classList.remove('has-typing-indicator');
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const nameText = names.length === 1 ? names[0] : names.slice(0, 2).join(', ');
+    const actionText = names.length === 1 ? ' is typing...' : ' are typing...';
+
+    const nameNode = document.createElement('span');
+    nameNode.className = 'typing-username';
+    nameNode.textContent = nameText;
+
+    const textNode = document.createElement('span');
+    textNode.className = 'typing-text';
+    textNode.textContent = actionText;
+
+    fragment.append(nameNode, textNode);
+    typingIndicator.hidden = false;
+    typingIndicator.replaceChildren(fragment);
+    main?.classList.add('has-typing-indicator');
+
+    requestAnimationFrame(() => {
+      if (messageList.scrollHeight > messageList.clientHeight) {
+        messageList.scrollTop = messageList.scrollHeight;
+      }
+    });
   }
 
   function renderRoomUsers(users, host) {
@@ -669,8 +708,22 @@ async function initializeRemote() {
   });
   chatForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    localTypingState = false;
+    socket.emit('typing', { roomId: currentRoom, username, isTyping: false });
     sendChat(chatInput.value);
     chatInput.value = '';
+  });
+  chatInput.addEventListener('input', () => {
+    if (!currentRoom || !socket.connected) return;
+    const nextTypingState = chatInput.value.trim().length > 0;
+    if (localTypingState === nextTypingState) return;
+    localTypingState = nextTypingState;
+    socket.emit('typing', { roomId: currentRoom, username, isTyping: nextTypingState });
+  });
+  chatInput.addEventListener('blur', () => {
+    if (!currentRoom || !localTypingState) return;
+    localTypingState = false;
+    socket.emit('typing', { roomId: currentRoom, username, isTyping: false });
   });
   emojiBar.addEventListener('click', (event) => {
     const button = event.target.closest('.emoji-btn');
@@ -867,6 +920,9 @@ async function initializeRemote() {
     for (const message of state.chatHistory || []) {
       if (isVisibleAfterChatClear(message)) addMessage(message);
     }
+  });
+  socket.on('room-typing', ({ users = [] }) => {
+    renderTypingIndicator(users);
   });
   socket.on('new-message', (message) => {
     if (isVisibleAfterChatClear(message)) addMessage(message);

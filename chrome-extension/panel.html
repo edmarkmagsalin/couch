@@ -42,10 +42,13 @@
           <ul id="room-users-list" aria-label="Users in this room"></ul>
         </div>
       </div>
-      <main><ul id="messages"></ul></main>
+      <main>
+        <ul id="messages"></ul>
+        <div id="typing-indicator" class="typing-indicator" aria-live="polite" aria-atomic="true" hidden></div>
+      </main>
       <footer>
         <!-- Toolbar containing Emojis and Timestamp Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3.2px 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3.2px 8px; border-top: 1px solid rgb(255 255 255 / 10%);">
           <div id="emoji-bar">
             <button class="emoji-btn" title="Clap">👏</button>
             <button class="emoji-btn" title="Laugh">😂</button>

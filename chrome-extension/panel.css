@@ -428,6 +428,43 @@
       text-align: center;
     }
 
+    main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    main.has-typing-indicator #messages {
+      height: calc(var(--couch-chat-height, 130px) - 22px);
+      max-height: calc(var(--couch-chat-height, 130px) - 22px);
+    }
+
+    .typing-indicator {
+      min-height: 14px;
+      padding: 4px 10px 4px;
+      font-size: 10px;
+      line-height: 14px;
+      color: rgb(255 255 255 / 75%);
+      font-style: italic;
+      opacity: 0.9;
+      flex: 0 0 auto;
+    }
+
+    .typing-indicator[hidden] {
+      display: none;
+    }
+
+    .typing-username {
+      color: var(--couch-accent);
+      font-style: normal;
+      font-weight: 700;
+    }
+
+    .typing-text {
+      color: rgb(255 255 255 / 75%);
+      font-style: italic;
+    }
+
     .compact-message {
       overflow: hidden;
       font-size: 10px;
@@ -571,7 +608,6 @@
 
 #messages {
   border-top: 1px solid rgb(255 255 255 / 10%);
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
   list-style-type: none;
   margin: 0;
   padding: 10px;

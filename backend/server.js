@@ -330,9 +330,18 @@ io.on('connection', (socket) => {
   // Helper function to handle user removal, host reassignment, and room deletion
   function removeUserAndReassignHost(roomId, socketId) {
     if (!roomStates[roomId]) return;
-    
+
     const room = roomStates[roomId];
-    
+    if (room.typingUsers && room.users) {
+      const typingUsername = room.users.find(user => user.socketId === socketId)?.username;
+      if (typingUsername) {
+        room.typingUsers.delete(typingUsername);
+        io.in(roomId).emit('room-typing', {
+          users: [...room.typingUsers].filter(Boolean)
+        });
+      }
+    }
+
     // 1. Find the user who is leaving
     const departingUser = room.users.find(u => u.socketId === socketId);
     if (!departingUser) return;
@@ -661,13 +670,35 @@ io.on('connection', (socket) => {
   });
 
   // --- CHAT EVENTS ---
+  socket.on('typing', ({ roomId, username, isTyping }) => {
+    const room = roomStates[roomId];
+    const participant = room?.users?.find(user => user.socketId === socket.id);
+    if (!room || !participant || typeof isTyping !== 'boolean') return;
+
+    const displayName = typeof username === 'string' && username.trim()
+      ? username.trim()
+      : participant.username;
+
+    if (!room.typingUsers) room.typingUsers = new Set();
+    if (isTyping) {
+      room.typingUsers.add(displayName);
+    } else {
+      room.typingUsers.delete(displayName);
+    }
+
+    io.in(roomId).emit('room-typing', {
+      users: [...room.typingUsers].filter(Boolean)
+    });
+  });
+
   socket.on('send-message', ({ roomId, username, text }) => {
     console.log(`[CHAT] ${username} in ${roomId}: ${text}`);
 
     if (!roomStates[roomId]) {
       roomStates[roomId] = {
         video: { status: 'paused', timestamp: 0, updatedAt: Date.now() },
-        chatHistory: []
+        chatHistory: [],
+        typingUsers: new Set()
       };
     }
 
@@ -686,6 +717,13 @@ io.on('connection', (socket) => {
       io.in(roomId).emit('pause-video', {
         timestamp: room.video.timestamp,
         updatedAt
+      });
+    }
+
+    if (roomStates[roomId].typingUsers) {
+      roomStates[roomId].typingUsers.delete(username);
+      io.in(roomId).emit('room-typing', {
+        users: [...roomStates[roomId].typingUsers].filter(Boolean)
       });
     }
 
