@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { Server } from 'socket.io';
 import cors from 'cors';
 
@@ -691,7 +692,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('send-message', ({ roomId, username, text }) => {
+  socket.on('send-message', ({ roomId, username, text, messageId, replyTo }, callback) => {
     console.log(`[CHAT] ${username} in ${roomId}: ${text}`);
 
     if (!roomStates[roomId]) {
@@ -703,7 +704,24 @@ io.on('connection', (socket) => {
     }
 
     const normalizedText = String(text ?? '');
-    const chatMessage = { sender: username, text: normalizedText, time: Date.now() };
+    const normalizedReply = replyTo
+      && typeof replyTo.id === 'string'
+      && typeof replyTo.sender === 'string'
+      && typeof replyTo.text === 'string'
+      ? {
+          id: replyTo.id.slice(0, 100),
+          sender: replyTo.sender.slice(0, 80),
+          text: replyTo.text.slice(0, 500)
+        }
+      : null;
+    const chatMessage = {
+      id: typeof messageId === 'string' && messageId.length <= 100 ? messageId : randomUUID(),
+      sender: username,
+      text: normalizedText,
+      time: Date.now(),
+      seenBy: [],
+      ...(normalizedReply ? { replyTo: normalizedReply } : {})
+    };
 
     if (containsPauseTrigger(normalizedText)) {
       const room = roomStates[roomId];
@@ -733,6 +751,27 @@ io.on('connection', (socket) => {
     roomStates[roomId].chatHistory.push(chatMessage);
 
     socket.to(roomId).emit('new-message', chatMessage);
+    if (typeof callback === 'function') {
+      callback({ success: true, messageId: chatMessage.id });
+    }
+  });
+
+  socket.on('message-seen', ({ roomId, messageId }) => {
+    const room = roomStates[roomId];
+    const participant = room?.users?.find(user => user.socketId === socket.id);
+    if (!room || !participant || typeof messageId !== 'string') return;
+
+    const message = room.chatHistory.find(item => item.id === messageId);
+    if (!message || message.sender === participant.username) return;
+    if (!Array.isArray(message.seenBy)) message.seenBy = [];
+    if (message.seenBy.includes(participant.username)) return;
+
+    message.seenBy.push(participant.username);
+    io.in(roomId).emit('message-seen', {
+      roomId,
+      messageId,
+      username: participant.username
+    });
   });
 
   // --- DISCONNECT EVENT ---

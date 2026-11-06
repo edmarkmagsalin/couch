@@ -52,6 +52,10 @@ async function initializeRemote() {
   const messageList = shadow.getElementById('messages');
   const chatForm = shadow.getElementById('chat-form');
   const chatInput = shadow.getElementById('chat-input');
+  const replyComposer = shadow.getElementById('reply-composer');
+  const replyComposerSender = shadow.getElementById('reply-composer-sender');
+  const replyComposerText = shadow.getElementById('reply-composer-text');
+  const replyCancelButton = shadow.getElementById('reply-cancel-btn');
   const emojiBar = shadow.getElementById('emoji-bar');
   const timestampButton = shadow.getElementById('timestamp-btn');
   const themeToggle = document.getElementById('theme-toggle');
@@ -106,6 +110,88 @@ async function initializeRemote() {
   let hasReceivedVolumeState = false;
   let chatHistoryClearedAt = 0;
   let joiningRoomId = null;
+  let replyTarget = null;
+  const seenReceiptsSent = new Set();
+  const messageSeenBy = new WeakMap();
+
+  function setReplyTarget(message, focusInput = true) {
+    replyTarget = message;
+    replyComposer.hidden = !message;
+    chatContainer.classList.toggle('has-reply-composer', Boolean(message));
+    if (message) {
+      replyComposerSender.textContent = message.sender;
+      replyComposerText.textContent = message.text;
+      if (focusInput) chatInput.focus();
+    }
+  }
+
+  function canMarkMessagesSeen() {
+    return Boolean(
+      currentRoom
+      && isRoomJoined
+      && socket.connected
+      && !document.hidden
+      && !isCompactView
+      && chatContainer.classList.contains('remote-expanded')
+    );
+  }
+
+  function markMessageSeen(row) {
+    const messageId = row.dataset.serverMessageId;
+    if (
+      !messageId
+      || row.dataset.messageSender === username
+      || row.classList.contains('system')
+      || !canMarkMessagesSeen()
+    ) {
+      return;
+    }
+
+    const receiptKey = `${currentRoom}\0${messageId}`;
+    if (seenReceiptsSent.has(receiptKey)) return;
+    seenReceiptsSent.add(receiptKey);
+    socket.emit('message-seen', { roomId: currentRoom, messageId });
+  }
+
+  function scheduleVisibleMessageSeenScan() {
+    requestAnimationFrame(() => {
+      if (!canMarkMessagesSeen()) return;
+      for (const row of messageList.children) {
+        messageSeenObserver.unobserve(row);
+        messageSeenObserver.observe(row);
+      }
+    });
+  }
+
+  function renderMessageSeenIndicator(row, seenBy, isSent = true) {
+    const names = [...new Set((Array.isArray(seenBy) ? seenBy : [])
+      .filter((name) => typeof name === 'string' && name && name !== username))];
+    messageSeenBy.set(row, names);
+    const content = row.querySelector('.message-content');
+    if (content) {
+      content.title = [
+        row.dataset.messageTimestampTitle,
+        names.length > 0 ? `Seen by ${names.join(', ')}` : ''
+      ].filter(Boolean).join('\n');
+    }
+    let indicator = row.querySelector('.message-status-icon');
+    if (!isSent) {
+      indicator?.remove();
+      return;
+    }
+    if (!indicator) {
+      indicator = document.createElement('span');
+      indicator.className = 'message-status-icon';
+      content?.append(indicator);
+    }
+    CouchShared.setMessageStatusIcon(indicator, names.length > 0 ? 'seen' : 'sent');
+  }
+
+  const messageSeenObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) markMessageSeen(entry.target);
+    }
+  }, { root: messageList, threshold: 0.1 });
 
   const chatResizer = CouchShared.createChatResizer(chatResizeHandle, hostContainer, {
     initialHeight: 180,
@@ -346,6 +432,13 @@ async function initializeRemote() {
     const row = document.createElement('li');
     row.className = 'message-row';
     row.dataset.messageTime = String(Number.isFinite(message.time) ? message.time : Date.now());
+    const messageId = CouchShared.getMessageId(message);
+    row.dataset.messageId = messageId;
+    if (typeof message.id === 'string' && message.id) {
+      row.dataset.serverMessageId = message.id;
+    }
+    row.dataset.messageSender = message.sender === 'You' ? username : message.sender;
+    row.dataset.messageText = message.text;
     const isSystem = message.sender === 'System';
     const isOwnMessage = message.sender === 'You' || message.sender === username;
     row.classList.add(isSystem ? 'system' : isOwnMessage ? 'right' : 'left');
@@ -353,7 +446,26 @@ async function initializeRemote() {
 
     const content = document.createElement('span');
     content.className = 'message-content';
-    content.textContent = message.text;
+    const messageDate = new Date(message.time);
+    if (Number.isFinite(messageDate.getTime())) {
+      content.title = messageDate.toLocaleString();
+      row.dataset.messageTimestampTitle = content.title;
+    }
+    if (message.replyTo) {
+      const quote = document.createElement('button');
+      quote.type = 'button';
+      quote.className = 'message-reply-quote';
+      quote.dataset.replyTargetId = message.replyTo.id;
+      quote.setAttribute('aria-label', `Jump to ${message.replyTo.sender}'s message`);
+      const quoteSender = document.createElement('span');
+      quoteSender.className = 'message-reply-quote-sender';
+      quoteSender.textContent = message.replyTo.sender;
+      const quoteText = document.createElement('span');
+      quoteText.className = 'message-reply-quote-text';
+      quoteText.textContent = message.replyTo.text;
+      quote.append(quoteSender, quoteText);
+      content.append(quote);
+    }
     if (isSystem) {
       if (message.type === 'playback-position-announcement' && Array.isArray(message.participants)) {
         content.classList.add('playback-announcement');
@@ -400,13 +512,33 @@ async function initializeRemote() {
         }
         row.append(senderLabel);
       }
+      const messageText = document.createElement('span');
+      messageText.className = 'message-text';
+      messageText.textContent = message.text;
       if (CouchShared.isSingleEmoji(message.text)) {
-        content.classList.add('emoji-only');
+        if (message.replyTo) messageText.classList.add('emoji-only');
+        else content.classList.add('emoji-only');
       }
+      content.append(messageText);
       row.append(content);
     }
 
+    if (!isSystem) {
+      if (isOwnMessage) {
+        renderMessageSeenIndicator(row, message.seenBy, !message.deliveryPending);
+      }
+      const replyButton = document.createElement('button');
+      replyButton.type = 'button';
+      replyButton.className = 'message-reply-button';
+      replyButton.dataset.replyMessageId = messageId;
+      replyButton.textContent = 'Reply';
+      replyButton.setAttribute('aria-label', `Reply to ${message.sender}`);
+      replyButton.title = `Reply to ${message.sender}`;
+      row.append(replyButton);
+    }
+
     messageList.append(row);
+    messageSeenObserver.observe(row);
     while (messageList.children.length > 100) messageList.firstElementChild.remove();
     messageList.scrollTop = messageList.scrollHeight;
     const compact = document.createElement('div');
@@ -435,7 +567,10 @@ async function initializeRemote() {
     lobby.classList.toggle('remote-hidden', currentRoom !== null);
     chatContainer.classList.toggle('remote-expanded', currentRoom !== null);
     chatContainer.classList.toggle('remote-hidden', currentRoom === null);
-    if (currentRoom) requestAnimationFrame(() => chatInput.focus());
+    if (currentRoom) {
+      scheduleVisibleMessageSeenScan();
+      requestAnimationFrame(() => chatInput.focus());
+    }
   }
 
   function showCompactView() {
@@ -471,6 +606,7 @@ async function initializeRemote() {
     isSyncingPlayback = false;
     isRoomJoined = false;
     currentRoom = null;
+    setReplyTarget(null, false);
     currentHost = null;
     joiningRoomId = null;
     hasRemoteVideo = false;
@@ -537,12 +673,36 @@ async function initializeRemote() {
       emitVideoAction('pause', timestamp);
     }
 
-    addMessage({ sender: 'You', text: message, time: Date.now() });
-    socket.emit('send-message', { roomId: currentRoom, username, text: message });
+    const messageId = crypto.randomUUID();
+    const messageReplyTo = replyTarget;
+    addMessage({
+      id: messageId,
+      sender: 'You',
+      text: message,
+      time: Date.now(),
+      deliveryPending: true,
+      replyTo: messageReplyTo
+    });
+    socket.timeout(6000).emit('send-message', {
+      roomId: currentRoom,
+      username,
+      text: message,
+      messageId,
+      replyTo: messageReplyTo
+    }, (error, result) => {
+      if (error || !result?.success) {
+        console.error('Could not confirm message delivery:', error || result?.message);
+        return;
+      }
+      const row = [...messageList.children].find((item) => item.dataset.messageId === messageId);
+      if (row) renderMessageSeenIndicator(row, messageSeenBy.get(row), true);
+    });
+    setReplyTarget(null, false);
   }
 
   function clearOwnChatHistory() {
     if (!currentRoom) return;
+    setReplyTarget(null, false);
     const latestMessageTime = [...messageList.children].reduce((latest, message) => {
       const time = Number(message.dataset.messageTime);
       return Number.isFinite(time) ? Math.max(latest, time) : latest;
@@ -769,6 +929,30 @@ async function initializeRemote() {
     });
   }
   messageList.addEventListener('click', handlePlaybackSyncClick);
+  messageList.addEventListener('click', (event) => {
+    const replyButton = event.target.closest('button[data-reply-message-id]');
+    if (replyButton) {
+      const row = replyButton.closest('.message-row');
+      if (!row) return;
+      setReplyTarget({
+        id: row.dataset.messageId,
+        sender: row.dataset.messageSender,
+        text: row.dataset.messageText
+      });
+      return;
+    }
+
+    const quote = event.target.closest('button[data-reply-target-id]');
+    if (!quote) return;
+    const originalMessage = [...messageList.children].find(
+      (row) => row.dataset.messageId === quote.dataset.replyTargetId
+    );
+    if (!originalMessage) return;
+    originalMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    originalMessage.classList.add('is-reply-target');
+    setTimeout(() => originalMessage.classList.remove('is-reply-target'), 1200);
+  });
+  replyCancelButton.addEventListener('click', () => setReplyTarget(null));
   compactMessages.addEventListener('click', handlePlaybackSyncClick);
   themeToggle.addEventListener('click', () => {
     applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
@@ -849,6 +1033,7 @@ async function initializeRemote() {
   });
 
   socket.on('connect', () => {
+    seenReceiptsSent.clear();
     setConnection('Connected to Couch', 'connected');
     updateButtons();
     maybeAutoJoinFromUrl();
@@ -878,6 +1063,7 @@ async function initializeRemote() {
     }
   });
   socket.on('disconnect', () => {
+    seenReceiptsSent.clear();
     const timestamp = currentTimestamp();
     playbackSyncRequestId += 1;
     isSyncingPlayback = false;
@@ -920,12 +1106,25 @@ async function initializeRemote() {
     for (const message of state.chatHistory || []) {
       if (isVisibleAfterChatClear(message)) addMessage(message);
     }
+    scheduleVisibleMessageSeenScan();
   });
   socket.on('room-typing', ({ users = [] }) => {
     renderTypingIndicator(users);
   });
   socket.on('new-message', (message) => {
     if (isVisibleAfterChatClear(message)) addMessage(message);
+  });
+  socket.on('message-seen', ({ roomId, messageId, username: seenByUsername }) => {
+    if (roomId !== currentRoom) return;
+    const row = [...messageList.children].find((item) => (
+      item.dataset.messageId === messageId
+      && item.dataset.messageSender === username
+    ));
+    if (!row) return;
+    const seenBy = messageSeenBy.get(row) || [];
+    if (!seenBy.includes(seenByUsername)) {
+      renderMessageSeenIndicator(row, [...seenBy, seenByUsername]);
+    }
   });
   socket.on('play-video', ({ timestamp, updatedAt }) => setPlayback('playing', timestamp, updatedAt));
   socket.on('pause-video', ({ timestamp, updatedAt }) => setPlayback('paused', timestamp, updatedAt));
@@ -969,6 +1168,7 @@ async function initializeRemote() {
   window.addEventListener('pagehide', persistSession);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') persistSession();
+    else scheduleVisibleMessageSeenScan();
   });
   updateButtons();
 }

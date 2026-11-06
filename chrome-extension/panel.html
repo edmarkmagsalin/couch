@@ -76,6 +76,13 @@
 
 
         <div style="padding: 0 8px 8px 8px;">
+          <div id="reply-composer" class="reply-composer" hidden>
+            <div class="reply-composer-preview">
+              <b id="reply-composer-sender"></b>
+              <span id="reply-composer-text"></span>
+            </div>
+            <button id="reply-cancel-btn" type="button" aria-label="Cancel reply">×</button>
+          </div>
           <form id="chat-form" style="display: flex;">
             <input type="text" id="chat-input" placeholder="Type..." autocomplete="off" required />
           </form>

@@ -12,6 +12,50 @@ function isSingleEmoji(text) {
   return /(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3)/u.test(segments[0].segment);
 }
 
+function getMessageId(message) {
+  if (typeof message?.id === 'string' && message.id) return message.id;
+
+  const source = [
+    String(message?.sender ?? ''),
+    Number.isFinite(message?.time) ? message.time : '',
+    String(message?.text ?? '')
+  ].join('\0');
+  let firstHash = 2166136261;
+  let secondHash = 2246822519;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source.charCodeAt(index);
+    firstHash = Math.imul(firstHash ^ character, 16777619);
+    secondHash = Math.imul(secondHash ^ character, 3266489917);
+  }
+  return `legacy-${(firstHash >>> 0).toString(36)}-${(secondHash >>> 0).toString(36)}`;
+}
+
+function setMessageStatusIcon(indicator, status) {
+  const isSeen = status === 'seen';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+
+  const paths = isSeen
+    ? ['M18 6 7 17l-5-5', 'm22 10-7.5 7.5L13 16']
+    : ['M20 6 9 17l-5-5'];
+  for (const pathData of paths) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathData);
+    svg.append(path);
+  }
+
+  indicator.dataset.status = isSeen ? 'seen' : 'sent';
+  indicator.setAttribute('role', 'img');
+  indicator.setAttribute('aria-label', isSeen ? 'Seen' : 'Sent');
+  indicator.replaceChildren(svg);
+}
+
 function formatTimestamp(seconds) {
   const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
   const hours = Math.floor(totalSeconds / 3600);
@@ -144,6 +188,8 @@ function createChatResizer(handle, host, { initialHeight, onCommit = () => {} } 
 
 globalThis.CouchShared = Object.freeze({
   isSingleEmoji,
+  getMessageId,
+  setMessageStatusIcon,
   formatTimestamp,
   parseTimestamp,
   parseSeekCommand,

@@ -407,6 +407,7 @@ function showFullView() {
   lobbyView.style.display = currentRoom ? 'none' : 'flex';
   chatContainer.style.display = currentRoom ? 'flex' : 'none';
   if (currentRoom) {
+    scheduleVisibleMessageSeenScan();
     requestAnimationFrame(() => chatInput.focus());
   }
 }
@@ -551,17 +552,104 @@ window.addEventListener('resize', snapToEdge);
 const messageList = shadow.getElementById('messages');
 const chatForm = shadow.getElementById('chat-form');
 const chatInput = shadow.getElementById('chat-input');
+const replyComposer = shadow.getElementById('reply-composer');
+const replyComposerSender = shadow.getElementById('reply-composer-sender');
+const replyComposerText = shadow.getElementById('reply-composer-text');
+const replyCancelButton = shadow.getElementById('reply-cancel-btn');
 const typingIndicator = shadow.getElementById('typing-indicator');
 const roomUsersToggle = shadow.getElementById('room-users-toggle');
 const roomUsersCount = shadow.getElementById('room-users-count');
 const roomUsersPanel = shadow.getElementById('room-users-panel');
 const roomUsersList = shadow.getElementById('room-users-list');
 const messageMain = messageList.closest('main');
+const seenReceiptsSent = new Set();
+const messageSeenBy = new WeakMap();
+let replyTarget = null;
+
+function setReplyTarget(message, focusInput = true) {
+  replyTarget = message;
+  replyComposer.hidden = !message;
+  chatContainer.classList.toggle('has-reply-composer', Boolean(message));
+  if (message) {
+    replyComposerSender.textContent = message.sender;
+    replyComposerText.textContent = message.text;
+    if (focusInput) chatInput.focus();
+  }
+}
+
+function canMarkMessagesSeen() {
+  return Boolean(
+    currentRoom
+    && socket.connected
+    && !document.hidden
+    && !isCompactView
+    && isMessageMainVisible
+    && chatContainer.style.display !== 'none'
+  );
+}
+
+function markMessageSeen(row) {
+  const messageId = row.dataset.serverMessageId;
+  if (
+    !messageId
+    || row.dataset.messageSender === myUsername
+    || row.classList.contains('system')
+    || !canMarkMessagesSeen()
+  ) {
+    return;
+  }
+
+  const receiptKey = `${currentRoom}\0${messageId}`;
+  if (seenReceiptsSent.has(receiptKey)) return;
+  seenReceiptsSent.add(receiptKey);
+  socket.emit('message-seen', { roomId: currentRoom, messageId });
+}
+
+function scheduleVisibleMessageSeenScan() {
+  requestAnimationFrame(() => {
+    if (!canMarkMessagesSeen()) return;
+    for (const row of messageList.children) {
+      messageSeenObserver.unobserve(row);
+      messageSeenObserver.observe(row);
+    }
+  });
+}
+
+function renderMessageSeenIndicator(row, seenBy, isSent = true) {
+  const names = [...new Set((Array.isArray(seenBy) ? seenBy : [])
+    .filter((name) => typeof name === 'string' && name && name !== myUsername))];
+  messageSeenBy.set(row, names);
+  const messageContent = row.querySelector('.message-content');
+  if (messageContent) {
+    messageContent.title = [
+      row.dataset.messageTimestampTitle,
+      names.length > 0 ? `Seen by ${names.join(', ')}` : ''
+    ].filter(Boolean).join('\n');
+  }
+  let indicator = row.querySelector('.message-status-icon');
+  if (!isSent) {
+    indicator?.remove();
+    return;
+  }
+  if (!indicator) {
+    indicator = document.createElement('span');
+    indicator.className = 'message-status-icon';
+    messageContent?.append(indicator);
+  }
+  CouchShared.setMessageStatusIcon(indicator, names.length > 0 ? 'seen' : 'sent');
+}
+
+const messageSeenObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) markMessageSeen(entry.target);
+  }
+}, { root: messageList, threshold: 0.1 });
 
 const messagesVisibilityObserver = new IntersectionObserver(([entry]) => {
   isMessageMainVisible = entry.isIntersecting;
   if (!entry.isIntersecting) return;
 
+  scheduleVisibleMessageSeenScan();
   requestAnimationFrame(() => {
     messageList.scrollTop = messageList.scrollHeight;
   });
@@ -707,10 +795,43 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
   const rowDiv = document.createElement('div');
   rowDiv.className = 'message-row';
   rowDiv.dataset.messageTime = String(time);
+  const messageId = CouchShared.getMessageId({
+    id: announcement?.id,
+    sender,
+    text,
+    time
+  });
+  rowDiv.dataset.messageId = messageId;
+  if (typeof announcement?.id === 'string' && announcement.id) {
+    rowDiv.dataset.serverMessageId = announcement.id;
+  }
+  rowDiv.dataset.messageSender = sender === 'You' ? myUsername : sender;
+  rowDiv.dataset.messageText = text;
 
   const messageContent = document.createElement('span');
   messageContent.className = 'message-content';
-  if (CouchShared.isSingleEmoji(text)) messageContent.classList.add('emoji-only');
+  const messageDate = new Date(time);
+  if (Number.isFinite(messageDate.getTime())) {
+    messageContent.title = messageDate.toLocaleString();
+    rowDiv.dataset.messageTimestampTitle = messageContent.title;
+  }
+  const isEmojiOnly = CouchShared.isSingleEmoji(text);
+  if (isEmojiOnly && !announcement?.replyTo) messageContent.classList.add('emoji-only');
+  if (announcement?.replyTo) {
+    const quote = document.createElement('button');
+    quote.type = 'button';
+    quote.className = 'message-reply-quote';
+    quote.dataset.replyTargetId = announcement.replyTo.id;
+    quote.setAttribute('aria-label', `Jump to ${announcement.replyTo.sender}'s message`);
+    const quoteSender = document.createElement('span');
+    quoteSender.className = 'message-reply-quote-sender';
+    quoteSender.textContent = announcement.replyTo.sender;
+    const quoteText = document.createElement('span');
+    quoteText.className = 'message-reply-quote-text';
+    quoteText.textContent = announcement.replyTo.text;
+    quote.append(quoteSender, quoteText);
+    messageContent.append(quote);
+  }
 
   const compactRow = document.createElement('div');
   compactRow.className = 'compact-message';
@@ -755,7 +876,11 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
     rowDiv.appendChild(messageContent);
   } else if (sender === 'You' || sender === myUsername) {
     rowDiv.classList.add('right');
-    messageContent.appendChild(buildLinkifiedText(text));
+    const messageText = document.createElement('span');
+    messageText.className = 'message-text';
+    if (isEmojiOnly && announcement?.replyTo) messageText.classList.add('emoji-only');
+    messageText.appendChild(buildLinkifiedText(text));
+    messageContent.appendChild(messageText);
     rowDiv.appendChild(messageContent);
   } else {
     rowDiv.classList.add('left');
@@ -763,8 +888,26 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
     const senderLabel = createSenderLabel(sender, isHost);
 
     rowDiv.appendChild(senderLabel);
-    messageContent.appendChild(buildLinkifiedText(text));
+    const messageText = document.createElement('span');
+    messageText.className = 'message-text';
+    if (isEmojiOnly && announcement?.replyTo) messageText.classList.add('emoji-only');
+    messageText.appendChild(buildLinkifiedText(text));
+    messageContent.appendChild(messageText);
     rowDiv.appendChild(messageContent);
+  }
+
+  if (messageId && sender !== 'System') {
+    if (sender === 'You' || sender === myUsername) {
+      renderMessageSeenIndicator(rowDiv, announcement?.seenBy, !announcement?.deliveryPending);
+    }
+    const replyButton = document.createElement('button');
+    replyButton.type = 'button';
+    replyButton.className = 'message-reply-button';
+    replyButton.dataset.replyMessageId = messageId;
+    replyButton.textContent = 'Reply';
+    replyButton.setAttribute('aria-label', `Reply to ${sender}`);
+    replyButton.title = `Reply to ${sender}`;
+    rowDiv.appendChild(replyButton);
   }
 
   if (announcement?.type === 'playback-position-announcement' && announcement.syncTargetUsername) {
@@ -772,6 +915,7 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
   }
 
   messageList.appendChild(rowDiv);
+  messageSeenObserver.observe(rowDiv);
   compactMessages.appendChild(compactRow);
 
   while (compactMessages.children.length > 2) {
@@ -786,6 +930,7 @@ function appendMessage(sender, text, time = Date.now(), announcement = null) {
 function clearChatHistory() {
   messageList.innerHTML = '';
   compactMessages.innerHTML = '';
+  setReplyTarget(null, false);
 }
 
 function renderRoomUsers(users, host) {
@@ -846,12 +991,28 @@ function emitLocalChatMessage(text) {
     });
   }
 
-  appendMessage('You', trimmedText);
-  socket.emit('send-message', {
+  const messageId = crypto.randomUUID();
+  const messageReplyTo = replyTarget;
+  appendMessage('You', trimmedText, Date.now(), {
+    id: messageId,
+    deliveryPending: true,
+    replyTo: messageReplyTo
+  });
+  socket.timeout(6000).emit('send-message', {
     roomId: currentRoom,
     username: myUsername,
-    text: trimmedText
+    text: trimmedText,
+    messageId,
+    replyTo: messageReplyTo
+  }, (error, result) => {
+    if (error || !result?.success) {
+      console.error('Could not confirm message delivery:', error || result?.message);
+      return;
+    }
+    const row = [...messageList.children].find((item) => item.dataset.messageId === messageId);
+    if (row) renderMessageSeenIndicator(row, messageSeenBy.get(row), true);
   });
+  setReplyTarget(null, false);
 
   requestAnimationFrame(() => chatInput.focus());
 }
@@ -1044,6 +1205,7 @@ function renderSyncedChatHistory(history) {
   history
     .filter(isVisibleAfterChatClear)
     .forEach((message) => appendMessage(message.sender, message.text, message.time, message));
+  scheduleVisibleMessageSeenScan();
 }
 
 function isVisibleAfterChatClear(message) {
@@ -1167,6 +1329,30 @@ function handlePlaybackSyncClick(event) {
   });
 }
 messageList.addEventListener('click', handlePlaybackSyncClick);
+messageList.addEventListener('click', (event) => {
+  const replyButton = event.target.closest('button[data-reply-message-id]');
+  if (replyButton) {
+    const row = replyButton.closest('.message-row');
+    if (!row) return;
+    setReplyTarget({
+      id: row.dataset.messageId,
+      sender: row.dataset.messageSender,
+      text: row.dataset.messageText
+    });
+    return;
+  }
+
+  const quote = event.target.closest('button[data-reply-target-id]');
+  if (!quote) return;
+  const originalMessage = [...messageList.children].find(
+    (row) => row.dataset.messageId === quote.dataset.replyTargetId
+  );
+  if (!originalMessage) return;
+  originalMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  originalMessage.classList.add('is-reply-target');
+  setTimeout(() => originalMessage.classList.remove('is-reply-target'), 1200);
+});
+replyCancelButton.addEventListener('click', () => setReplyTarget(null));
 compactMessages.addEventListener('click', handlePlaybackSyncClick);
 
 let copyFeedbackTimer = null;
@@ -1259,6 +1445,25 @@ socket.on('new-message', (data) => {
   if (!isVisibleAfterChatClear(data)) return;
   appendMessage(data.sender, data.text, data.time, data);
   highlightNewMessage();
+});
+socket.on('message-seen', ({ roomId, messageId, username }) => {
+  if (roomId !== currentRoom) return;
+  const row = [...messageList.children].find((item) => (
+    item.dataset.messageId === messageId
+    && item.dataset.messageSender === myUsername
+  ));
+  if (!row) return;
+  const seenBy = messageSeenBy.get(row) || [];
+  if (!seenBy.includes(username)) renderMessageSeenIndicator(row, [...seenBy, username]);
+});
+socket.on('connect', () => {
+  seenReceiptsSent.clear();
+});
+socket.on('disconnect', () => {
+  seenReceiptsSent.clear();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) scheduleVisibleMessageSeenScan();
 });
 socket.on('sync-room', (state) => {
   currentHost = state.host;
